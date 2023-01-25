@@ -6,9 +6,14 @@ import json
 from termcolor import colored
 from urllib.parse import urlparse
 
+"""
+1. Get list of all outdated packages
+2. If a package has upgraded a major version number, show changelog
+3. "Do you want to updated X packages? [Y/n]: "
+4. Update everything
+"""
 
 devMode = True
-
 
 def error(message):
 	print(colored("ERROR: ", "red") + message)
@@ -30,7 +35,7 @@ def getGithubChangelog(url):
 		except:
 			return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
 
-def getPypiChangelog(package):
+def getPypiChangelog(package, newVersion):
 	url = "https://pypi.org/pypi/" + package + "/json"
 
 	#TODO: Error handling and throttling
@@ -64,19 +69,78 @@ def getPypiChangelog(package):
 			#TODO: Add an option to allow the user to fill in the source code site
 			return warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
 
-"""
-goto :comment
-1. Get list of all outdated packages
-2. If a package has upgraded a major version number, show changelog
-3. "Do you want to updated X packages? [Y/n]: "
-4. Update everything
-"""
+# This function receives the output of "pip list --outdated" and a whitelist of which programs to update
+def pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages):
+	"""pipOutput is the output of \"pip list --outdated\"\n
+		pipWhitelistedPackages is the list of packages that will be updated\n
+		This function returns an array of the upgradeable packages
+		"""
+	upgradeablePackages=[]
+	for line in pipOutput[2:]:
+		package = re.findall(r"^([^\s]+)", line)
+		package = package[0]
 
+		if package in pipWhitelistedPackages:
+		
+			# Regex magic
+			oldVersion = re.sub(package + "( )+", "", line)
+			newVersion = oldVersion
+			oldVersion = re.findall("^([^\s]+)", oldVersion)
+			newVersion = re.sub(oldVersion[0] + "( )+", "", newVersion)
+			newVersion = re.findall("^([^\s]+)", newVersion)
+
+			# List to string
+			newVersion = newVersion[0]
+			oldVersion = oldVersion[0]
+
+			semverNewVersion = semver.VersionInfo.parse(newVersion)
+			semverOldVersion = semver.VersionInfo.parse(oldVersion)
+
+			if(semverNewVersion > semverOldVersion):
+				
+				upgradeablePackages.append(package)
+
+				#TODO: Add flag to enable show changelog for major, minor and patch releases
+
+				if(semverNewVersion.major > semverOldVersion.major):
+					print(colored("NEW MAJOR VERSION: ", "green") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+					try:
+						changelog = getPypiChangelog(package, newVersion)
+						print(changelog + "\n")
+					except:
+						# If getPypiChangelog returned an error...
+						continue
+
+				elif(semverNewVersion.minor > semverOldVersion.minor):
+					print(colored("New minor version: ", "blue") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+				else:
+					print("New patch version: " + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+	return upgradeablePackages
+
+
+def pipUpgradeVenvs(pathToVenv, packageToUpgrade):
+	stream = os.popen("cd " + pathToVenv +"\Scripts & activate & pip list --outdated")
+	pipOutput = stream.readlines()
+	pipWhitelistedPackages = [packageToUpgrade]
+	upgradeable = pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages)
+	if len(upgradeable) == 1:
+		return [pathToVenv, packageToUpgrade]
+	else:
+		return []
+
+############################ END OF FUNCTIONS ##########################
+
+# Setup githubtoken
 try:
 	githubToken = os.environ["fupdate-github-token"]
 except KeyError:
 	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token") + " to your github personal access token. Without it, we can't fetch the changelogs.")
 	githubToken = ""
+
+# Update gup packages
 
 if not devMode:
 	stream = os.popen("gup check")
@@ -128,73 +192,41 @@ for line in gupOutput:
 				else:
 					print("You must manually check the release notes for: " + package)
 
+########################## Update pip packages ##########################
+
+pipUpgradeablePackages = []
+pipUpgradeableVenvs = []
+
 if not devMode:
 	stream = os.popen("pip list --outdated")
 	pipOutput = stream.readlines()
+
+	pipWhitelistedPackages = ["pip_audit",
+	"safety",
+	"guessit",
+	"srt"]
 else:
 	pipOutput = ["Package    Version Latest Type",
 	"---------- ------- ------ -----",
-	"pip_audit  1.1.2  2.4.14 wheel",
-	"safety     2.4.0  2.5.0   wheel",
-	"guessit    2.5.0  3.0.0   wheel",
-	"rich       13.0.1  13.2.0 wheel",
-	"setuptools 65.5.0  66.1.1 wheel"]
+	"pip_audit    1.1.2   2.4.14 wheel",
+	"minorPackage 2.4.0   2.5.0  wheel",
+	"patchPackage 2.5.0   2.5.1  wheel",
+	"rich         13.0.1  13.2.0 wheel",
+	"setuptools   65.5.0  66.1.1 wheel"]
+	pipWhitelistedPackages = ["pip_audit", "minorPackage", "patchPackage"]
 
-pipWhitelistedPackages = ["pip_audit",
-"safety",
-"guessit",
-"srt"]
+# Check pip upgrades
+pipUpgradeablePackages = pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages)
 
-pipPackagesToUpdate=[]
-
-pipFirstLoop = True
-for line in pipOutput[2:]:
-	package = re.findall(r"^([^\s]+)", line)
-	package = package[0]
-
-	if package in pipWhitelistedPackages:
-	
-		# Regex magic
-		oldVersion = re.sub(package + "( )+", "", line)
-		newVersion = oldVersion
-		oldVersion = re.findall("^([^\s]+)", oldVersion)
-		newVersion = re.sub(oldVersion[0] + "( )+", "", newVersion)
-		newVersion = re.findall("^([^\s]+)", newVersion)
-
-		# List to string
-		newVersion = newVersion[0]
-		oldVersion = oldVersion[0]
-
-		semverNewVersion = semver.VersionInfo.parse(newVersion)
-		semverOldVersion = semver.VersionInfo.parse(oldVersion)
-
-		if(semverNewVersion > semverOldVersion):
-			pipPackagesToUpdate.append(package)
-
-			#TODO: Add flag to enable show changelog for major, minor and patch releases
-
-			if(semverNewVersion.major > semverOldVersion.major):
-				print(colored("NEW MAJOR VERSION: ", "green") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-				try:
-					changelog = getPypiChangelog(package)
-					print(changelog + "\n")
-				except:
-					# If getPypiChangelog returned an error...
-					continue
-
-			elif(semverNewVersion.minor > semverOldVersion.minor):
-				print(colored("New minor version: ", "blue") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-			else:
-				print("New patch version: " + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
+# Check upgrades for pip virtualenvs
+safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVenv","safety")
+if len(safetyUpgrade) == 2:
+	pipUpgradeableVenvs.append(safetyUpgrade)
 
 
 
 """
-pip virtualenvs
-	cmd /k "cd C:\Program Files\HackingSoftware\safetyPythonVenv\Scripts & activate & pip install safety --upgrade & deactivate & exit 0"
+git projects
 	cd C:\Program Files\HackingSoftware\github-search
 	git pull
 	cd C:\Program Files\HackingSoftware\graudit
