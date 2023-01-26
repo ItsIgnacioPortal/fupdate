@@ -46,6 +46,7 @@ def forceSemver(version):
 	"""Recieves a string that should ressemble a semver. This function would convert \"v3.5\" -> \"3.5.0\""""
 	try:
 		version = semver.VersionInfo.parse(version)
+		return [version, False]
 	except ValueError:
 		versionSplit = version.split(".")
 		for number in versionSplit:
@@ -61,7 +62,7 @@ def forceSemver(version):
 		else:
 			return [None, Exception]
 	
-	return [version, None]
+	return [version, True]
 
 			
 
@@ -116,7 +117,7 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 		pathListLen = len(pathList)
 
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-		if pathListLen == 2 or pathListLen == 3:
+		if (pathListLen == 2 or pathListLen == 3) or (pathListLen == 4 and pathList[3] == "latest"):
 			# url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
 			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + version
 
@@ -151,7 +152,7 @@ def getPypiChangelog(package, newVersion):
 			sourceCodeURL = responseJSON["info"]["project_urls"]["Source"]
 			sourceCodeURL = urllib.parse.urlparse(sourceCodeURL)
 			if sourceCodeURL.hostname == "github.com":				
-				return getGithubChangelog(url, newVersion)
+				return getGithubChangelog(sourceCodeURL, newVersion)
 			else:
 				return warning("\tUnable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
 
@@ -310,7 +311,7 @@ def chocoCheckForUpgrades(chocoOutput):
 									releaseNotesURLParsed = urllib.parse.urlparse(releaseNotesURL)
 									if releaseNotesURLParsed.hostname == "github.com":
 										releaseNotes[0] = True
-										releaseNotes[1] = getGithubChangelog(releaseNotesURLParsed, packageInfoLine[2])
+										releaseNotes[1] = getGithubChangelog(releaseNotesURLParsed, line[2])
 									else:
 										releaseNotes[0] = True
 										releaseNotes[1] = "\t" + packageInfoLine.strip()
