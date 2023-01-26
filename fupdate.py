@@ -14,7 +14,11 @@ from urllib.parse import urlparse
 """
 
 devMode = True
-
+versionNotificationSettings={
+	"Major Versions": True,
+	"Minor Versions": False,
+	"Patch Versions": False
+	}
 
 def error(message):
 	print(colored("ERROR: ", "red") + message)
@@ -38,7 +42,62 @@ def stripLeadingV(version):
 	else:
 		return version
 
+def forceSemver(version):
+	"""Recieves a string that should ressemble a semver. This function would convert \"v3.5\" -> \"3.5.0\""""
+	try:
+		version = semver.VersionInfo.parse(version)
+	except ValueError:
+		versionSplit = version.split(".")
+		for number in versionSplit:
+			try:
+				int(number)
+			except ValueError:
+				error("Unable to parse " + colored(version, "yellow") + " as a Semantic Version (See: https://semver.org)")
+				return [None, Exception]
+		
+		if len(versionSplit) == 2:
+			version = version + ".0"
+		else:
+			return [None, Exception]
+	
+	return [version, None]
 
+			
+
+def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) -> bool:
+	"""Recieves the raw version strings, parses them, outputs a fancy message depending on the notificationSettings
+	\nReturns True or False if newVersion is newer than oldVersion"""
+	newVersion = stripLeadingV(newVersion)
+	oldVersion = stripLeadingV(oldVersion)
+
+	# Parse versions that don't comply with semantic versioning
+	semverNewVersion = forceSemver(newVersion)
+	semverOldVersion = forceSemver(oldVersion)
+
+	if semverNewVersion[1] == Exception or semverOldVersion[1] == Exception:
+		return False
+	
+	semverNewVersion = semverNewVersion[0]
+	semverOldVersion = semverOldVersion[0]
+
+	if(semverNewVersion > semverOldVersion):
+
+		if(semverNewVersion.major > semverOldVersion.major):
+			print(colored("NEW MAJOR VERSION: ", "green") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			return versionNotificationSettings["Major Versions"]
+
+		elif(semverNewVersion.minor > semverOldVersion.minor):
+			print(colored("New minor version: ", "blue") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			return versionNotificationSettings["Minor Versions"]
+
+		else:
+			print("New patch version: " + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			return versionNotificationSettings["Patch Versions"]
+
+	elif devMode:
+		print(package + " " + oldVersion + "==" + newVersion)
+
+	return False
 
 def getGithubChangelog(url):
 	if githubToken != "":
@@ -106,27 +165,19 @@ def gupIsUpgradeAvailable(gupOutput):
 				newVersion = ((re.findall(r"to .*", versionList[0]))[0])[3:-1]
 				oldVersion = ((re.findall(r".* to", versionList[0]))[0])[1:-3]
 				
-				newVersion = stripLeadingV(newVersion)
-
-				oldVersion = stripLeadingV(oldVersion)
-
-				semverNewVersion = semver.VersionInfo.parse(newVersion)
-				semverOldVersion = semver.VersionInfo.parse(oldVersion)
-
-				if (semverNewVersion > semverOldVersion):
+				# If a new version is available...
+				if parseVersions(newVersion, oldVersion, package, "gup"):
 					packages.append(package)
-					if(semverNewVersion.major > semverOldVersion.major):
-						print(colored("NEW MAJOR VERSION: ", "green") + colored("(gup) ", "yellow") + line)
-						if package.startswith("github.com"):
-							packageList = package.split("/")
-							
-							if not devMode:
-								url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
+					if package.startswith("github.com"):
+						packageList = package.split("/")
+						
+						if not devMode:
+							url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
 
-								print(getGithubChangelog(url) + "\n")
+							print(getGithubChangelog(url) + "\n")
 
-						else:
-							print("You must manually check the release notes for: " + package)
+					else:
+						print("You must manually check the release notes for: " + package)
 						
 	return packages
 
@@ -155,31 +206,15 @@ def pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages):
 			newVersion = newVersion[0]
 			oldVersion = oldVersion[0]
 
-			semverNewVersion = semver.VersionInfo.parse(newVersion)
-			semverOldVersion = semver.VersionInfo.parse(oldVersion)
-
-			if(semverNewVersion > semverOldVersion):
-				
+			# If a new version is available...
+			if parseVersions(newVersion, oldVersion, package, "pip"):
 				upgradeablePackages.append(package)
-
-				#TODO: Add flag to enable show changelog for major, minor and patch releases
-
-				if(semverNewVersion.major > semverOldVersion.major):
-					print(colored("NEW MAJOR VERSION: ", "green") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-					try:
-						changelog = getPypiChangelog(package, newVersion)
-						print(changelog + "\n")
-					except:
-						# If getPypiChangelog returned an error...
-						continue
-
-				elif(semverNewVersion.minor > semverOldVersion.minor):
-					print(colored("New minor version: ", "blue") + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-				else:
-					print("New patch version: " + colored("(pip) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
+				try:
+					changelog = getPypiChangelog(package, newVersion)
+					print(changelog + "\n")
+				except:
+					# If getPypiChangelog returned an error...
+					continue
 	return upgradeablePackages
 
 
@@ -197,7 +232,6 @@ def checkGitRepoUpgrade(path):
 	stream = os.popen("cd " + path + " && git describe --tags")
 	oldVersion = stream.readlines()
 	oldVersion = (oldVersion[0]).strip()
-	oldVersion = stripLeadingV(oldVersion)
 	oldVersion = re.sub(r"-[0-9]{1,2}+-([A-z]|[0-9]){6,9}", "", oldVersion)
 
 	stream = os.popen("cd " + path + " && git config --get remote.origin.url")
@@ -229,31 +263,10 @@ def checkGitRepoUpgrade(path):
 			except:
 				return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
 
-			newVersion = stripLeadingV(newVersion)
-
-			semverNewVersion = semver.VersionInfo.parse(newVersion)
-			semverOldVersion = semver.VersionInfo.parse(oldVersion)
-
-			if(semverNewVersion > semverOldVersion):
-
-
-				#TODO: Add flag to enable show changelog for major, minor and patch releases
-
-				if(semverNewVersion.major > semverOldVersion.major):
-					print(colored("NEW MAJOR VERSION: ", "green") + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-					url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
-
-					changelog = getGithubChangelog(url)
-					print(changelog + "\n")
-						
-
-				elif(semverNewVersion.minor > semverOldVersion.minor):
-					print(colored("New minor version: ", "blue") + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
-				else:
-					print("New patch version: " + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
-
+			if parseVersions(newVersion, oldVersion, package, "git"):
+				url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
+				changelog = getGithubChangelog(url)
+				print(changelog + "\n")
 
 	else:
 		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
@@ -310,9 +323,7 @@ if len(safetyUpgrade) == 2:
 
 # Check upgrades for git repositories
 checkGitRepoUpgrade("C:\Program Files\HackingSoftware\github-search")
-
-#graudit doesn't use semantic versioning :/
-#checkGitRepoUpgrade("C:\Program Files\HackingSoftware\graudit")
+checkGitRepoUpgrade("C:\Program Files\HackingSoftware\graudit")
 
 """
 choco
