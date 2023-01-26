@@ -101,9 +101,7 @@ def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) 
 
 	return False
 
-def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
-	
-	version = stripLeadingV(version)
+def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 
 	if not isinstance(repoURL, urllib.parse.ParseResult):
 		try:
@@ -117,10 +115,51 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 		pathListLen = len(pathList)
 
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-		if (pathListLen == 2 or pathListLen == 3) or (pathListLen == 4 and pathList[3] == "latest"):
-			# url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
-			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + version
+		if pathListLen == 2 or (pathListLen == 3 and pathList[2] == "json") or (pathListLen == 4 and pathList[3] == "latest"):
+			#/repos/{owner}/{repo}/releases/latest
+			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/latest"
 
+
+		else:
+			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+
+
+	headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
+			
+	#TODO: Error handling and throttling
+	response = requests.get(url, headers=headers)
+
+	responseJSON = json.loads(response.text)
+
+	try:
+		return (responseJSON["tag_name"])
+	except:
+		return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
+
+
+def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
+	
+	if githubToken != "":
+		version = stripLeadingV(version)
+
+		if not isinstance(repoURL, urllib.parse.ParseResult):
+			try:
+				repoURL = urllib.parse.urlparse(repoURL)
+			except:
+				return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+
+
+		pathList = (repoURL.path[1:]).split("/") 
+		pathListLen = len(pathList)
+
+		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
+		if pathListLen == 2 or (pathListLen == 3 and pathList[2] == "json") or (pathListLen == 4 and pathList[3] == "latest"):
+			
+			latestVersion = getLatestGithubRelease(repoURL)
+			if latestVersion.startswith("v"):
+				version = "v" + version
+
+			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/" + version
 
 		else:
 			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
@@ -257,26 +296,13 @@ def checkGitRepoUpgrade(path):
 	pathListLen = len(pathList)
 
 	#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-	if pathListLen == 2 or pathListLen == 3:
-		#/repos/{owner}/{repo}/releases/latest
-		url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/latest"
-
+	if pathListLen == 2 or (pathListLen == 3 and pathList[2] == ""):
 		package = pathList[0] + "/" + pathList[1]
-
 		if githubToken != "":
-			headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
-			
-			#TODO: Error handling and throttling
-			response = requests.get(url, headers=headers)
-
-			responseJSON = json.loads(response.text)
-
-			try:
-				newVersion = (responseJSON["tag_name"])
-			except:
-				return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
+			newVersion = getLatestGithubRelease(remote)
 
 			if parseVersions(newVersion, oldVersion, package, "git"):
+				package = pathList[0] + "/" + pathList[1]
 				url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
 				changelog = getGithubChangelog(url)
 				print(changelog + "\n")
@@ -324,6 +350,17 @@ def chocoCheckForUpgrades(chocoOutput):
 					print("\tRelease notes were not included in the nuspec.")
 				else:
 					print(releaseNotes[1])
+
+
+def npmIsUpdateAvailable(npmOutput: str, npmWhitelistedPackages):
+	npmOutput = npmOutput.strip()
+	npmOutputJSON = json.loads(npmOutput)
+
+	if len(npmOutputJSON) == 0:
+		return
+
+	for key in npmOutputJSON.keys():
+		print(npmOutputJSON[key])
 
 
 ############################ END OF FUNCTIONS ##########################
@@ -411,8 +448,16 @@ else:
 
 chocoCheckForUpgrades(chocoOutput)
 
+if devMode:
+	stream = os.popen("npm outdated --json")
+	npmOutput = stream.read()
+else:
+	npmOutput ='{\n  "calculator": {\n    "current": "0.1.11",\n    "wanted": "0.1.12",\n    "latest": "0.1.12",\n    "dependent": "User",\n    "location": "C:\\\\Users\\\\User\\\\node_modules\\\\calculator"\n  }\n}\n'
+
+npmWhitelistedPackages = ["calculator"]
+npmUpgradeablePackages = npmIsUpdateAvailable(npmOutput, npmWhitelistedPackages)
+
 """
-npm
 microsoft store
 winget
 """
