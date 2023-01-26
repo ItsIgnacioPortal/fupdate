@@ -4,7 +4,7 @@ import semver
 import requests
 import json
 from termcolor import colored
-from urllib.parse import urlparse
+import urllib.parse
 
 """
 1. Get list of all outdated packages
@@ -57,6 +57,7 @@ def forceSemver(version):
 		
 		if len(versionSplit) == 2:
 			version = version + ".0"
+			version = semver.VersionInfo.parse(version)
 		else:
 			return [None, Exception]
 	
@@ -99,8 +100,31 @@ def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) 
 
 	return False
 
-def getGithubChangelog(url):
+def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
+	
+	version = stripLeadingV(version)
+
+	if not isinstance(repoURL, urllib.parse.ParseResult):
+		try:
+			repoURL = urllib.parse.urlparse(repoURL)
+		except:
+			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+
+
 	if githubToken != "":
+		pathList = (repoURL.path[1:]).split("/") 
+		pathListLen = len(pathList)
+
+		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
+		if pathListLen == 2 or pathListLen == 3:
+			# url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
+			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + version
+
+
+		else:
+			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+
+
 		headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
 		
 		#TODO: Error handling and throttling
@@ -111,7 +135,7 @@ def getGithubChangelog(url):
 		try:
 			return responseJSON["body"]
 		except:
-			return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
+			return colored("\tERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
 
 def getPypiChangelog(package, newVersion):
 	url = "https://pypi.org/pypi/" + package + "/json"
@@ -125,29 +149,17 @@ def getPypiChangelog(package, newVersion):
 	else:
 		try:
 			sourceCodeURL = responseJSON["info"]["project_urls"]["Source"]
-			sourceCodeURL = urlparse(sourceCodeURL)
+			sourceCodeURL = urllib.parse.urlparse(sourceCodeURL)
 			if sourceCodeURL.hostname == "github.com":				
-				pathList = (sourceCodeURL.path[1:]).split("/") 
-				pathListLen = len(pathList)
-
-				#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-				if pathListLen == 2 or pathListLen == 3:
-					# url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
-					url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
-
-					return getGithubChangelog(url)
-
-				else:
-					return colored("FATAL ERROR: ", "red") + "The github source code URL for " + colored(package, "yellow") + " was malformed: " + colored(sourceCodeURL, "yellow")
-
+				return getGithubChangelog(url, newVersion)
 			else:
-				return warning("Unable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
+				return warning("\tUnable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
 
 		except KeyError:
 			#TODO: Add an option to allow the user to fill in the source code site
-			return warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
+			return warning("\tUnable to get source code site for the " + colored(package, "yellow") + " pypi package.")
 
-def gupIsUpgradeAvailable(gupOutput):
+def gupCheckForUpgrades(gupOutput):
 	"""gupOutput = The output of \"gup check\""""
 	packages = []
 
@@ -237,7 +249,7 @@ def checkGitRepoUpgrade(path):
 	stream = os.popen("cd " + path + " && git config --get remote.origin.url")
 	remote = stream.readlines()
 	remote = (remote[0]).strip()
-	remote = urlparse(remote)
+	remote = urllib.parse.urlparse(remote)
 
 	# Parse URL
 	pathList = (remote.path[1:]).split("/") 
@@ -271,6 +283,47 @@ def checkGitRepoUpgrade(path):
 	else:
 		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
 
+def chocoCheckForUpgrades(chocoOutput):
+	"""Receives the raw output of \"choco outdated\""""
+	chocoOutput = chocoOutput[4:-3]
+	for line in chocoOutput:
+		line = line.split("|")
+		if not line[0].endswith(".install"):
+			if parseVersions(line[2], line[1], line[0], "choco"):
+				stream = os.popen("choco info " + line[0])
+				packageInfo = stream.readlines()
+
+				#Found the release notes,  
+				#[True|False,             url|]
+				releaseNotes=[False, ""]
+
+				titles=["Release Notes", " Software Source", "Software Site"]
+
+				for title in titles:
+					# If we haven't found the release notes yet...
+					if not releaseNotes[0]:
+						title = " " + title +": "
+						for packageInfoLine in packageInfo:
+							if packageInfoLine.startswith(title):
+								releaseNotesURL = (packageInfoLine[len(title):]).strip()
+								try:
+									releaseNotesURLParsed = urllib.parse.urlparse(releaseNotesURL)
+									if releaseNotesURLParsed.hostname == "github.com":
+										releaseNotes[0] = True
+										releaseNotes[1] = getGithubChangelog(releaseNotesURLParsed, packageInfoLine[2])
+									else:
+										releaseNotes[0] = True
+										releaseNotes[1] = "\t" + packageInfoLine.strip()
+								except:
+									releaseNotes[0] = True
+									releaseNotes[1] = "\t" + packageInfoLine.strip()
+								break
+
+				if not releaseNotes[0]:
+					print("\tRelease notes were not included in the nuspec.")
+				else:
+					print(releaseNotes[1])
+
 
 ############################ END OF FUNCTIONS ##########################
 
@@ -288,7 +341,7 @@ else:
 	"gup: INFO: [5/6] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)",
 	"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
 
-gupUpgradeablePackages = gupIsUpgradeAvailable(gupOutput)
+gupUpgradeablePackages = gupCheckForUpgrades(gupOutput)
 
 # Update pip packages 
 
@@ -325,8 +378,39 @@ if len(safetyUpgrade) == 2:
 checkGitRepoUpgrade("C:\Program Files\HackingSoftware\github-search")
 checkGitRepoUpgrade("C:\Program Files\HackingSoftware\graudit")
 
+if not devMode:
+	stream = os.popen("choco outdated")
+	chocoOutput = stream.readlines()
+else:
+	chocoOutput = ["Chocolatey v1.2.1",
+	"Outdated Packages",
+	" Output is package name | current version | available version | pinned?",
+	"",
+	"dotnet-7.0-desktopruntime|7.0.1|7.0.2|false",
+	"dotnet-desktopruntime|7.0.1|7.0.2|false",
+	"ds4windows|3.2.6|3.2.7|false",
+	"filezilla|3.62.2|3.63.0|false",
+	"Firefox|108.0.1|109.0|false",
+	"golang|1.19.4|1.19.5|false",
+	"imagemagick|7.1.0.56|7.1.0.57|false",
+	"imagemagick.app|7.1.0.56|7.1.0.58|false",
+	"nextcloud-client|3.6.4|3.6.6|false",
+	"obs-studio|28.1.2|29.0.0|false",
+	"obs-studio.install|28.1.2|29.0.0|false",
+	"openjdk|19.0.1|19.0.2|false",
+	"protonvpn|2.3.1|2.3.2|false",
+	"super-productivity|7.12.0|7.12.1|false",
+	"teamviewer|15.37.3|15.38.3|false",
+	"winscp|5.21.6|5.21.7|false",
+	"winscp.install|5.21.6|5.21.7|false",
+	"wireshark|4.0.2|4.0.3|false",
+	"",
+	"Chocolatey has determined 18 package(s) are outdated.",
+	""]
+
+chocoCheckForUpgrades(chocoOutput)
+
 """
-choco
 npm
 microsoft store
 winget
