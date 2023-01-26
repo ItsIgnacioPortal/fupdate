@@ -29,11 +29,16 @@ except KeyError:
 	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token") + " to your github personal access token. Without it, we can't fetch the changelogs.")
 	githubToken = ""
 
+
 def stripLeadingV(version):
+	"""Receives a function like \"v1.0.0\" and removes the trailing v\n
+	EXAMPLE: \"v1.0.0\" -> \"1.0.0\""""
 	if version.startswith("v"):
 		return version[1:]
 	else:
 		return version
+
+
 
 def getGithubChangelog(url):
 	if githubToken != "":
