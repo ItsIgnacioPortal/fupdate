@@ -15,11 +15,25 @@ from urllib.parse import urlparse
 
 devMode = True
 
+
 def error(message):
 	print(colored("ERROR: ", "red") + message)
 
 def warning(message):
 	print(colored("WARNING: ", "yellow") + message)
+
+# Setup githubtoken
+try:
+	githubToken = os.environ["fupdate-github-token"]
+except KeyError:
+	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token") + " to your github personal access token. Without it, we can't fetch the changelogs.")
+	githubToken = ""
+
+def stripLeadingV(version):
+	if version.startswith("v"):
+		return version[1:]
+	else:
+		return version
 
 def getGithubChangelog(url):
 	if githubToken != "":
@@ -68,6 +82,49 @@ def getPypiChangelog(package, newVersion):
 		except KeyError:
 			#TODO: Add an option to allow the user to fill in the source code site
 			return warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
+
+def gupIsUpgradeAvailable(gupOutput):
+	"""gupOutput = The output of \"gup check\""""
+	packages = []
+
+	for line in gupOutput:
+		line = line.strip()
+		if line != "gup: INFO: check binary under $GOPATH/bin or $GOBIN":
+			if "Already up-to-date" not in line:
+				line = re.sub(r".*\[[0-9]*\/[0-9]*\] ", "", line)
+
+				packagelist = re.findall(r".+ \(", line)
+				package = packagelist[0]
+				package = package[:-2]
+
+				versionList = re.findall(r"\(.*\)", line)
+				newVersion = ((re.findall(r"to .*", versionList[0]))[0])[3:-1]
+				oldVersion = ((re.findall(r".* to", versionList[0]))[0])[1:-3]
+				
+				newVersion = stripLeadingV(newVersion)
+
+				oldVersion = stripLeadingV(oldVersion)
+
+				semverNewVersion = semver.VersionInfo.parse(newVersion)
+				semverOldVersion = semver.VersionInfo.parse(oldVersion)
+
+				if (semverNewVersion > semverOldVersion):
+					packages.append(package)
+					if(semverNewVersion.major > semverOldVersion.major):
+						print(colored("NEW MAJOR VERSION: ", "green") + colored("(gup) ", "yellow") + line)
+						if package.startswith("github.com"):
+							packageList = package.split("/")
+							
+							if not devMode:
+								url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
+
+								print(getGithubChangelog(url) + "\n")
+
+						else:
+							print("You must manually check the release notes for: " + package)
+						
+	return packages
+
 
 # This function receives the output of "pip list --outdated" and a whitelist of which programs to update
 def pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages):
@@ -131,14 +188,73 @@ def pipUpgradeVenvs(pathToVenv, packageToUpgrade):
 	else:
 		return []
 
-############################ END OF FUNCTIONS ##########################
+def checkGitRepoUpgrade(path):
+	stream = os.popen("cd " + path + " && git describe --tags")
+	oldVersion = stream.readlines()
+	oldVersion = (oldVersion[0]).strip()
+	oldVersion = stripLeadingV(oldVersion)
+	oldVersion = re.sub(r"-[0-9]{1,2}+-([A-z]|[0-9]){6,9}", "", oldVersion)
 
-# Setup githubtoken
-try:
-	githubToken = os.environ["fupdate-github-token"]
-except KeyError:
-	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token") + " to your github personal access token. Without it, we can't fetch the changelogs.")
-	githubToken = ""
+	stream = os.popen("cd " + path + " && git config --get remote.origin.url")
+	remote = stream.readlines()
+	remote = (remote[0]).strip()
+	remote = urlparse(remote)
+
+	# Parse URL
+	pathList = (remote.path[1:]).split("/") 
+	pathListLen = len(pathList)
+
+	#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
+	if pathListLen == 2 or pathListLen == 3:
+		#/repos/{owner}/{repo}/releases/latest
+		url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/latest"
+
+		package = pathList[0] + "/" + pathList[1]
+
+		if githubToken != "":
+			headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
+			
+			#TODO: Error handling and throttling
+			response = requests.get(url, headers=headers)
+
+			responseJSON = json.loads(response.text)
+
+			try:
+				newVersion = (responseJSON["tag_name"])
+			except:
+				return colored("ERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
+
+			newVersion = stripLeadingV(newVersion)
+
+			semverNewVersion = semver.VersionInfo.parse(newVersion)
+			semverOldVersion = semver.VersionInfo.parse(oldVersion)
+
+			if(semverNewVersion > semverOldVersion):
+
+
+				#TODO: Add flag to enable show changelog for major, minor and patch releases
+
+				if(semverNewVersion.major > semverOldVersion.major):
+					print(colored("NEW MAJOR VERSION: ", "green") + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+					url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
+
+					changelog = getGithubChangelog(url)
+					print(changelog + "\n")
+						
+
+				elif(semverNewVersion.minor > semverOldVersion.minor):
+					print(colored("New minor version: ", "blue") + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+				else:
+					print("New patch version: " + colored("(git) ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+
+
+	else:
+		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
+
+
+############################ END OF FUNCTIONS ##########################
 
 # Update gup packages
 
@@ -154,45 +270,9 @@ else:
 	"gup: INFO: [5/6] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)",
 	"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
 
-packages = []
-for line in gupOutput:
-	line = line.strip()
-	if line != "gup: INFO: check binary under $GOPATH/bin or $GOBIN":
-		if "Already up-to-date" not in line:
-			line = re.sub(r".*\[[0-9]*\/[0-9]*\] ", "", line)
+gupUpgradeablePackages = gupIsUpgradeAvailable(gupOutput)
 
-			packagelist = re.findall(r".+ \(", line)
-			package = packagelist[0]
-			package = package[:-2]
-			packages.append(package)
-
-			versionList = re.findall(r"\(.*\)", line)
-			newVersion = ((re.findall(r"to .*", versionList[0]))[0])[3:-1]
-			oldVersion = ((re.findall(r".* to", versionList[0]))[0])[1:-3]
-			
-			if newVersion.startswith("v"):
-				newVersion = newVersion[1:]
-
-			if oldVersion.startswith("v"):
-				oldVersion = oldVersion[1:]
-
-			semverNewVersion = semver.VersionInfo.parse(newVersion)
-			semverOldVersion = semver.VersionInfo.parse(oldVersion)
-
-			if(semverNewVersion.major > semverOldVersion.major):
-				print(colored("NEW MAJOR VERSION: ", "green") + colored("(gup) ", "yellow") + line)
-				if package.startswith("github.com"):
-					packageList = package.split("/")
-					
-					if not devMode:
-						url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
-
-						print(getGithubChangelog(url) + "\n")
-
-				else:
-					print("You must manually check the release notes for: " + package)
-
-########################## Update pip packages ##########################
+# Update pip packages 
 
 pipUpgradeablePackages = []
 pipUpgradeableVenvs = []
@@ -223,14 +303,13 @@ safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVe
 if len(safetyUpgrade) == 2:
 	pipUpgradeableVenvs.append(safetyUpgrade)
 
+# Check upgrades for git repositories
+checkGitRepoUpgrade("C:\Program Files\HackingSoftware\github-search")
 
+#graudit doesn't use semantic versioning :/
+#checkGitRepoUpgrade("C:\Program Files\HackingSoftware\graudit")
 
 """
-git projects
-	cd C:\Program Files\HackingSoftware\github-search
-	git pull
-	cd C:\Program Files\HackingSoftware\graudit
-	git pull
 choco
 npm
 microsoft store
