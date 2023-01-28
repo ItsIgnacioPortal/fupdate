@@ -29,4 +29,5 @@ git clone https://github.com/ItsIgnacioPortal/fupdate
 cd fupdate
 python fupdate.py
 ```
-NOTE: Consider adding fupdate as a git repo to be updated in the script.
+Consider adding fupdate as a git repo to be updated in the script.
+This script includes examples for how to update a github repo. (CTRL+F `githubSearch`). Make sure to remove those lines if you don't need them, as otherwise it would trigger an error.
