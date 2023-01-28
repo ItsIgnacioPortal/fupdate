@@ -8,6 +8,8 @@ import urllib.parse
 import subprocess
 import sys
 
+#https://gist.github.com/sylvainpelissier/ff072a6759082590a4fe8f7e070a4952
+import pyuac
 
 """
 1. Get list of all outdated packages
@@ -23,11 +25,11 @@ versionNotificationSettings={
 	"Patch Versions": False
 	}
 generalUpgradeSettings={
-	"gup": False,
-	"pip": False,
-	"pipVenvs": False,
-	"git": False,
-	"choco": False
+	"gup": True,
+	"pip": True,
+	"pipVenvs": True,
+	"git": True,
+	"choco": True
 	# "npm": True
 }
 
@@ -43,6 +45,10 @@ def error(message):
 
 def warning(message):
 	print(colored("WARNING: ", "yellow") + message)
+
+if not pyuac.isUserAdmin():
+	error("Admin privileges are needed!")
+	exit()
 
 # Setup githubtoken
 try:
@@ -84,9 +90,10 @@ def forceSemver(version):
 
 			
 
-def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) -> bool:
-	"""Recieves the raw version strings, parses them, outputs a fancy message depending on the notificationSettings
-	\nReturns True or False if newVersion is newer than oldVersion, but depending on the notificationSettings"""
+def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) -> list[bool, bool]:
+	"""Recieves the raw version strings, parses them, outputs a fancy message depending on the notificationSettings\n
+	First bool:  if the newVersion is newer than oldVersion\n
+	Second bool: if newVersion is newer than oldVersion, but depending on the notificationSettings"""
 
 	global numberOfMajorUpgrades
 	global numberOfMinorUpgrades
@@ -100,32 +107,31 @@ def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) 
 	semverOldVersion = forceSemver(oldVersion)
 
 	if semverNewVersion[1] == Exception or semverOldVersion[1] == Exception:
-		return False
+		return [False, False]
 	
 	semverNewVersion = semverNewVersion[0]
 	semverOldVersion = semverOldVersion[0]
 
 	if(semverNewVersion > semverOldVersion):
-
 		if(semverNewVersion.major > semverOldVersion.major):
 			print(colored("NEW MAJOR VERSION: ", "green") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
 			numberOfMajorUpgrades += 1
-			return versionNotificationSettings["Major Versions"]
+			return [True, versionNotificationSettings["Major Versions"]]
 
 		elif(semverNewVersion.minor > semverOldVersion.minor):
 			print(colored("New minor version: ", "blue") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
 			numberOfMinorUpgrades += 1
-			return versionNotificationSettings["Minor Versions"]
+			return [True, versionNotificationSettings["Minor Versions"]]
 
 		else:
 			print("New patch version: " + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
 			numberOfPatchUpgrades += 1
-			return versionNotificationSettings["Patch Versions"]
+			return [True, versionNotificationSettings["Patch Versions"]]
 
 	elif devMode:
 		print(package + " " + oldVersion + "==" + newVersion)
 
-	return False
+	return [False,False]
 
 def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 
@@ -244,8 +250,11 @@ def gupCheckForUpgrades(gupOutput):
 				oldVersion = ((re.findall(r".* to", versionList[0]))[0])[1:-3]
 				
 				# If a new version is available...
-				if parseVersions(newVersion, oldVersion, package, "gup"):
+				result = parseVersions(newVersion, oldVersion, package, "gup")
+				if result[0]:
 					packages.append(package)
+				
+				if result[1]:
 					if package.startswith("github.com"):
 						packageList = package.split("/")
 						
@@ -256,7 +265,9 @@ def gupCheckForUpgrades(gupOutput):
 
 					else:
 						print("You must manually check the release notes for: " + package)
-						
+
+					
+
 	return packages
 
 
@@ -285,8 +296,11 @@ def pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages):
 			oldVersion = oldVersion[0]
 
 			# If a new version is available...
-			if parseVersions(newVersion, oldVersion, package, "pip"):
+			result = parseVersions(newVersion, oldVersion, package, "pip")
+			if result[0]:
 				upgradeablePackages.append(package)
+
+			if result[1]:
 				try:
 					changelog = getPypiChangelog(package, newVersion)
 					print(changelog + "\n")
@@ -329,14 +343,14 @@ def checkGitRepoUpgrade(path: str) -> bool:
 		if githubToken != "":
 			newVersion = getLatestGithubRelease(remote)
 
-			newVersionIsAvailable = parseVersions(newVersion, oldVersion, package, "git")
-			if newVersionIsAvailable:
+			result = parseVersions(newVersion, oldVersion, package, "git")
+			if result[1]:
 				package = pathList[0] + "/" + pathList[1]
 				url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
 				changelog = getGithubChangelog(url)
 				print(changelog + "\n")
 				
-			return newVersionIsAvailable
+			return result[0]
 
 	else:
 		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
@@ -350,9 +364,12 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 	for line in chocoOutput:
 		line = line.split("|")
 		if not line[0].endswith(".install"):
-			if parseVersions(line[2], line[1], line[0], "choco"):
-				chocoUpgradeablePackages.append(line[0])
+			result = parseVersions(line[2], line[1], line[0], "choco")
 
+			if result[0]:
+				chocoUpgradeablePackages.append(line[0])
+			
+			if result[1]:
 				stream = os.popen("choco info " + line[0])
 				packageInfo = stream.readlines()
 
@@ -421,18 +438,6 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 			
 # 	return npmUpgradeablePackages
 
-def upgradeGitClone(path: str):
-	if not devMode:
-		command = "cd " + path + " & git pull"
-		print(colored("Running \"" + command + "\"...", "green"))
-	else:
-		command = "cd " + path + " & git pull --dry-run"
-		print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
-	
-	process = subprocess.Popen(command, stdout=subprocess.PIPE)
-	for c in iter(lambda: process.stdout.read(1), b""):
-		sys.stdout.buffer.write(c)
-
 def runCommand(command: str):
 	"""Runs a command and prints out its live output"""
 	process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
@@ -441,6 +446,17 @@ def runCommand(command: str):
 		if not line:
 			break
 		print(str(line.strip())[1:])
+
+def upgradeGitClone(path: str):
+	if not devMode:
+		command = "cd " + path + " & git pull"
+		print(colored("Running \"" + command + "\"...", "green"))
+	else:
+		command = "cd " + path + " & git pull --dry-run"
+		print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+	
+	runCommand(command)
+
 
 ############################ END OF FUNCTIONS ##########################
 
@@ -605,16 +621,17 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 	if generalUpgradeSettings["pip"] and pipUpgradeablePackages:
 		pipUpgradeablePackages = " ".join(pipUpgradeablePackages)
 		if not devMode:
-			command = "pip upgrade " + pipUpgradeablePackages
+			command = "pip install --upgrade " + pipUpgradeablePackages
 			print(colored("Running \"" + command + "\"...", "green"))
 		else:
-			command = "pip upgrade --dry-run " + pipUpgradeablePackages
+			command = "pip install --upgrade --dry-run " + pipUpgradeablePackages
 			print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
 
 		runCommand(command)
+		
 	# Upgrade python venvs
 	if generalUpgradeSettings["pipVenvs"]:
-		for venv in pipUpgradeVenvs:
+		for venv in pipUpgradeableVenvs:
 			pathToVenv = venv[0]
 			package = venv[1]
 
@@ -656,3 +673,7 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 	# 			print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
 
 	# 		runCommand(command)
+
+print(colored("==================================================", "green"))
+print(colored("                      ALL DONE!                   ", "green"))
+print(colored("==================================================", "green"))
