@@ -5,6 +5,9 @@ import requests
 import json
 from termcolor import colored
 import urllib.parse
+import subprocess
+import sys
+
 
 """
 1. Get list of all outdated packages
@@ -19,6 +22,18 @@ versionNotificationSettings={
 	"Minor Versions": False,
 	"Patch Versions": False
 	}
+generalUpgradeSettings={
+	"gup": False,
+	"pip": False,
+	"pipVenvs": False,
+	"git": False,
+	"choco": False,
+	"npm": True
+}
+
+numberOfMajorUpgrades = 0
+numberOfMinorUpgrades = 0
+numberOfPatchUpgrades = 0
 
 def error(message):
 	print(colored("ERROR: ", "red") + message)
@@ -68,7 +83,12 @@ def forceSemver(version):
 
 def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) -> bool:
 	"""Recieves the raw version strings, parses them, outputs a fancy message depending on the notificationSettings
-	\nReturns True or False if newVersion is newer than oldVersion"""
+	\nReturns True or False if newVersion is newer than oldVersion, but depending on the notificationSettings"""
+
+	global numberOfMajorUpgrades
+	global numberOfMinorUpgrades
+	global numberOfPatchUpgrades
+
 	newVersion = stripLeadingV(newVersion)
 	oldVersion = stripLeadingV(oldVersion)
 
@@ -86,14 +106,17 @@ def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) 
 
 		if(semverNewVersion.major > semverOldVersion.major):
 			print(colored("NEW MAJOR VERSION: ", "green") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			numberOfMajorUpgrades += 1
 			return versionNotificationSettings["Major Versions"]
 
 		elif(semverNewVersion.minor > semverOldVersion.minor):
 			print(colored("New minor version: ", "blue") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			numberOfMinorUpgrades += 1
 			return versionNotificationSettings["Minor Versions"]
 
 		else:
 			print("New patch version: " + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			numberOfPatchUpgrades += 1
 			return versionNotificationSettings["Patch Versions"]
 
 	elif devMode:
@@ -280,7 +303,9 @@ def pipUpgradeVenvs(pathToVenv, packageToUpgrade):
 	else:
 		return []
 
-def checkGitRepoUpgrade(path):
+def checkGitRepoUpgrade(path: str) -> bool:
+	"""Recieves the folder path of a github cloned repo.\n
+	Returns True if an update is available for the supplied repo"""
 	stream = os.popen("cd " + path + " && git describe --tags")
 	oldVersion = stream.readlines()
 	oldVersion = (oldVersion[0]).strip()
@@ -301,22 +326,30 @@ def checkGitRepoUpgrade(path):
 		if githubToken != "":
 			newVersion = getLatestGithubRelease(remote)
 
-			if parseVersions(newVersion, oldVersion, package, "git"):
+			newVersionIsAvailable = parseVersions(newVersion, oldVersion, package, "git")
+			if newVersionIsAvailable:
 				package = pathList[0] + "/" + pathList[1]
 				url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
 				changelog = getGithubChangelog(url)
 				print(changelog + "\n")
+				
+			return newVersionIsAvailable
 
 	else:
 		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
 
-def chocoCheckForUpgrades(chocoOutput):
+def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 	"""Receives the raw output of \"choco outdated\""""
+
+	chocoUpgradeablePackages = []
+
 	chocoOutput = chocoOutput[4:-3]
 	for line in chocoOutput:
 		line = line.split("|")
 		if not line[0].endswith(".install"):
 			if parseVersions(line[2], line[1], line[0], "choco"):
+				chocoUpgradeablePackages.append(line[0])
+
 				stream = os.popen("choco info " + line[0])
 				packageInfo = stream.readlines()
 
@@ -351,113 +384,272 @@ def chocoCheckForUpgrades(chocoOutput):
 				else:
 					print(releaseNotes[1])
 
+	return chocoUpgradeablePackages
 
-def npmIsUpdateAvailable(npmOutput: str, npmWhitelistedPackages):
+def npmIsUpdateAvailable(npmWhitelistedPackages: list[str]) -> list[str]:
 	npmOutput = npmOutput.strip()
 	npmOutputJSON = json.loads(npmOutput)
 
 	if len(npmOutputJSON) == 0:
 		return
 
-	for key in npmOutputJSON.keys():
-		print(npmOutputJSON[key])
+	npmUpgradeablePackages = []
 
+	for key in npmOutputJSON.keys():
+		package = str(key)
+		if package in npmWhitelistedPackages:
+			oldVersion = npmOutputJSON[key]["current"]
+			newVersion = npmOutputJSON[key]["wanted"]
+
+			# Parse versions that don't comply with semantic versioning
+			semverNewVersion = forceSemver(newVersion)
+			semverOldVersion = forceSemver(oldVersion)
+
+			if semverNewVersion[1] == Exception or semverOldVersion[1] == Exception:
+				return False
+			
+			semverNewVersion = semverNewVersion[0]
+			semverOldVersion = semverOldVersion[0]
+
+			if(semverNewVersion > semverOldVersion):
+				npmUpgradeablePackages.append(package)
+			
+			parseVersions(newVersion, oldVersion, package, "npm")
+			
+	return npmUpgradeablePackages
+
+def upgradeGitClone(path: str):
+	if not devMode:
+		command = "cd " + path + " & git pull"
+		print(colored("Running \"" + command + "\"...", "green"))
+	else:
+		command = "cd " + path + " & git pull --dry-run"
+		print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+	
+	process = subprocess.Popen(command, stdout=subprocess.PIPE)
+	for c in iter(lambda: process.stdout.read(1), b""):
+		sys.stdout.buffer.write(c)
+
+def runCommand(command: str):
+	"""Runs a command and prints out its live output"""
+	process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+	while process.stdout.readable():
+		line = process.stdout.readline()
+		if not line:
+			break
+		print(str(line.strip())[1:])
 
 ############################ END OF FUNCTIONS ##########################
 
 # Update gup packages
+if generalUpgradeSettings["gup"]:
+	if not devMode:
+		stream = os.popen("gup check")
+		gupOutput = stream.readlines()
+	else:
+		gupOutput=["gup: INFO: check binary under $GOPATH/bin or $GOBIN",
+		"gup: INFO: [1/6] github.com/gwen001/github-subdomains (Already up-to-date: v1.2.0)",
+		"gup: INFO: [2/6] github.com/OJ/gobuster/v3 (Already up-to-date: v3.4.0)"
+		"gup: INFO: [3/6] github.com/nao1215/gup (Already up-to-date: v0.15.1)",
+		"gup: INFO: [4/6] github.com/j3ssie/metabigor (Already up-to-date: v1.12.1)",
+		"gup: INFO: [5/6] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)",
+		"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
 
-if not devMode:
-	stream = os.popen("gup check")
-	gupOutput = stream.readlines()
-else:
-	gupOutput=["gup: INFO: check binary under $GOPATH/bin or $GOBIN",
-	"gup: INFO: [1/6] github.com/gwen001/github-subdomains (Already up-to-date: v1.2.0)",
-	"gup: INFO: [2/6] github.com/OJ/gobuster/v3 (Already up-to-date: v3.4.0)"
-	"gup: INFO: [3/6] github.com/nao1215/gup (Already up-to-date: v0.15.1)",
-	"gup: INFO: [4/6] github.com/j3ssie/metabigor (Already up-to-date: v1.12.1)",
-	"gup: INFO: [5/6] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)",
-	"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
+	gupUpgradeablePackages = gupCheckForUpgrades(gupOutput)
 
-gupUpgradeablePackages = gupCheckForUpgrades(gupOutput)
+if generalUpgradeSettings["pip"]:
+	# Update pip packages 
+	pipUpgradeablePackages = []
+	pipUpgradeableVenvs = []
 
-# Update pip packages 
+	if not devMode:
+		stream = os.popen("pip list --outdated")
+		pipOutput = stream.readlines()
 
-pipUpgradeablePackages = []
-pipUpgradeableVenvs = []
+		pipWhitelistedPackages = ["pip_audit",
+		"safety",
+		"guessit",
+		"srt"]
+	else:
+		pipOutput = ["Package    Version Latest Type",
+		"---------- ------- ------ -----",
+		"pip_audit    1.1.2   2.4.14 wheel",
+		"minorPackage 2.4.0   2.5.0  wheel",
+		"patchPackage 2.5.0   2.5.1  wheel",
+		"rich         13.0.1  13.2.0 wheel",
+		"setuptools   65.5.0  66.1.1 wheel"]
+		pipWhitelistedPackages = ["pip_audit", "minorPackage", "patchPackage"]
 
-if not devMode:
-	stream = os.popen("pip list --outdated")
-	pipOutput = stream.readlines()
+	# Check pip upgrades
+	pipUpgradeablePackages = pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages)
 
-	pipWhitelistedPackages = ["pip_audit",
-	"safety",
-	"guessit",
-	"srt"]
-else:
-	pipOutput = ["Package    Version Latest Type",
-	"---------- ------- ------ -----",
-	"pip_audit    1.1.2   2.4.14 wheel",
-	"minorPackage 2.4.0   2.5.0  wheel",
-	"patchPackage 2.5.0   2.5.1  wheel",
-	"rich         13.0.1  13.2.0 wheel",
-	"setuptools   65.5.0  66.1.1 wheel"]
-	pipWhitelistedPackages = ["pip_audit", "minorPackage", "patchPackage"]
+if generalUpgradeSettings["pipVenvs"]:
+	# Check upgrades for pip virtualenvs
+	safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVenv","safety")
+	if len(safetyUpgrade) == 2:
+		pipUpgradeableVenvs.append(safetyUpgrade)
 
-# Check pip upgrades
-pipUpgradeablePackages = pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages)
+if generalUpgradeSettings["git"]:
+	# Check upgrades for git repositories
+	githubSearchPath = "C:\Program Files\HackingSoftware\github-search"
+	githubSearch = checkGitRepoUpgrade(githubSearchPath)
 
-# Check upgrades for pip virtualenvs
-safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVenv","safety")
-if len(safetyUpgrade) == 2:
-	pipUpgradeableVenvs.append(safetyUpgrade)
+	grauditPath = "C:\Program Files\HackingSoftware\graudit"
+	graudit = checkGitRepoUpgrade(grauditPath)
 
-# Check upgrades for git repositories
-checkGitRepoUpgrade("C:\Program Files\HackingSoftware\github-search")
-checkGitRepoUpgrade("C:\Program Files\HackingSoftware\graudit")
+if generalUpgradeSettings["choco"]:
+	if not devMode:
+		stream = os.popen("choco outdated")
+		chocoOutput = stream.readlines()
+	else:
+		chocoOutput = ["Chocolatey v1.2.1",
+		"Outdated Packages",
+		" Output is package name | current version | available version | pinned?",
+		"",
+		"dotnet-7.0-desktopruntime|7.0.1|7.0.2|false",
+		"dotnet-desktopruntime|7.0.1|7.0.2|false",
+		"ds4windows|3.2.6|3.2.7|false",
+		"filezilla|3.62.2|3.63.0|false",
+		"Firefox|108.0.1|109.0|false",
+		"golang|1.19.4|1.19.5|false",
+		"imagemagick|7.1.0.56|7.1.0.57|false",
+		"imagemagick.app|7.1.0.56|7.1.0.58|false",
+		"nextcloud-client|3.6.4|3.6.6|false",
+		"obs-studio|28.1.2|29.0.0|false",
+		"obs-studio.install|28.1.2|29.0.0|false",
+		"openjdk|19.0.1|19.0.2|false",
+		"protonvpn|2.3.1|2.3.2|false",
+		"super-productivity|7.12.0|7.12.1|false",
+		"teamviewer|15.37.3|15.38.3|false",
+		"winscp|5.21.6|5.21.7|false",
+		"winscp.install|5.21.6|5.21.7|false",
+		"wireshark|4.0.2|4.0.3|false",
+		"",
+		"Chocolatey has determined 18 package(s) are outdated.",
+		""]
 
-if not devMode:
-	stream = os.popen("choco outdated")
-	chocoOutput = stream.readlines()
-else:
-	chocoOutput = ["Chocolatey v1.2.1",
-	"Outdated Packages",
-	" Output is package name | current version | available version | pinned?",
-	"",
-	"dotnet-7.0-desktopruntime|7.0.1|7.0.2|false",
-	"dotnet-desktopruntime|7.0.1|7.0.2|false",
-	"ds4windows|3.2.6|3.2.7|false",
-	"filezilla|3.62.2|3.63.0|false",
-	"Firefox|108.0.1|109.0|false",
-	"golang|1.19.4|1.19.5|false",
-	"imagemagick|7.1.0.56|7.1.0.57|false",
-	"imagemagick.app|7.1.0.56|7.1.0.58|false",
-	"nextcloud-client|3.6.4|3.6.6|false",
-	"obs-studio|28.1.2|29.0.0|false",
-	"obs-studio.install|28.1.2|29.0.0|false",
-	"openjdk|19.0.1|19.0.2|false",
-	"protonvpn|2.3.1|2.3.2|false",
-	"super-productivity|7.12.0|7.12.1|false",
-	"teamviewer|15.37.3|15.38.3|false",
-	"winscp|5.21.6|5.21.7|false",
-	"winscp.install|5.21.6|5.21.7|false",
-	"wireshark|4.0.2|4.0.3|false",
-	"",
-	"Chocolatey has determined 18 package(s) are outdated.",
-	""]
+	chocoUpgradeablePackages = chocoCheckForUpgrades(chocoOutput)
 
-chocoCheckForUpgrades(chocoOutput)
+if generalUpgradeSettings["npm"]:
+	npmWhitelistedPackages = ["calculator"]
+	npmUpgradeablePackages = npmIsUpdateAvailable(npmWhitelistedPackages)
 
-if devMode:
-	stream = os.popen("npm outdated --json")
-	npmOutput = stream.read()
-else:
-	npmOutput ='{\n  "calculator": {\n    "current": "0.1.11",\n    "wanted": "0.1.12",\n    "latest": "0.1.12",\n    "dependent": "User",\n    "location": "C:\\\\Users\\\\User\\\\node_modules\\\\calculator"\n  }\n}\n'
+#TODO: add winget support when they fix `winget list`: https://github.com/microsoft/winget-cli/issues/1155
 
-npmWhitelistedPackages = ["calculator"]
-npmUpgradeablePackages = npmIsUpdateAvailable(npmOutput, npmWhitelistedPackages)
+# user@DESKTOP-25GQVRM:~$ sudo apt upgrade
+# Reading package lists... Done
+# The following packages will be upgraded:
+#   sudo
+# 1 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+# Need to get 1,061 kB of archives.
+# After this operation, 0 B of additional disk space will be used.
+# Do you want to continue? [Y/n]
 
-"""
-microsoft store
-winget
-"""
+upgradeablePackages = []
+
+if generalUpgradeSettings["gup"]:
+	upgradeablePackages += gupUpgradeablePackages
+
+if generalUpgradeSettings["pip"]:
+	upgradeablePackages += pipUpgradeablePackages
+
+if generalUpgradeSettings["pipVenvs"]:
+	upgradeablePackages += pipUpgradeableVenvs
+
+if generalUpgradeSettings["git"]:
+	if githubSearch:
+		upgradeablePackages.append("githubSearch")
+	if graudit:
+		upgradeablePackages.append("graudit")
+
+if generalUpgradeSettings["choco"]:
+	upgradeablePackages += chocoUpgradeablePackages
+
+if generalUpgradeSettings["npm"]:
+	upgradeablePackages += npmUpgradeablePackages
+
+
+print("Need to upgrade " + colored(len(upgradeablePackages), "yellow") + " packages.")
+print("\t" + colored(str(numberOfMajorUpgrades) + " MAJOR upgrades", "green"))
+print("\t" + colored(str(numberOfMinorUpgrades) + " Minor upgrades", "blue"))
+print("\t" + str(numberOfPatchUpgrades) + " Patch upgrades")
+userWantsToUpdate = (input("Do you want to continue? [Y/n] ")).lower()
+
+# generalUpgradeSettings={
+# 	"gup": True,
+# 	"pip": True,
+# 	"pipVenvs": True,
+# 	"git": True,
+# 	"choco": True,
+# 	"npm": True
+# }
+if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
+	
+	# Upgrade go packages
+	# Putting a list in an if checks if its empty
+	if generalUpgradeSettings["gup"] and gupUpgradeablePackages:
+		if not devMode:
+			print(colored("Running \"gup update\"...", "green"))
+			command = "gup update"
+		else:
+			print(colored("devMode: ", "yellow") + colored("Running \"gup update --dry-run\"...", "green"))
+			command = "gup update --dry-run"
+
+		runCommand(command)
+
+	# Upgrade whitelisted pip packages
+	# Putting a list in an if checks if its empty
+	if generalUpgradeSettings["pip"] and pipUpgradeablePackages:
+		pipUpgradeablePackages = " ".join(pipUpgradeablePackages)
+		if not devMode:
+			command = "pip upgrade " + pipUpgradeablePackages
+			print(colored("Running \"" + command + "\"...", "green"))
+		else:
+			command = "pip upgrade --dry-run " + pipUpgradeablePackages
+			print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+
+		runCommand(command)
+	# Upgrade python venvs
+	if generalUpgradeSettings["pipVenvs"]:
+		for venv in pipUpgradeVenvs:
+			pathToVenv = venv[0]
+			package = venv[1]
+
+			if not devMode:
+				command = "cd " + pathToVenv + "\Scripts & activate & pip install --upgrade " + package
+				print(colored("Running \"" + command + "\"...", "green"))
+			else:
+				command = "cd " + pathToVenv + "\Scripts & activate & pip install --upgrade --dry-run " + package
+				print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+
+			runCommand(command)
+
+	# Upgrade git clones
+	if generalUpgradeSettings["git"]:
+		if githubSearch:
+			upgradeGitClone(githubSearchPath)
+		if graudit:
+			upgradeGitClone(grauditPath)
+		
+	# Upgrade chocolatey packages
+	if generalUpgradeSettings["choco"]:
+		if not devMode:
+			command = "choco upgrade all"
+			print(colored("Running \"" + command + "\"...", "green"))
+		else:
+			command = "choco upgrade --noop all"
+			print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+
+		runCommand(command)
+
+	# Upgrade npm packages
+	if generalUpgradeSettings["npm"]:
+		for package in npmUpgradeablePackages:
+			if not devMode:
+				command = "npm update " + package
+				print(colored("Running \"" + command + "\"...", "green"))
+			else:
+				command = "npm update --dry-run " + package
+				print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+
+			runCommand(command)
