@@ -252,8 +252,11 @@ def gupCheckForUpgrades(gupOutput):
 
 	for line in gupOutput:
 		line = line.strip()
-		if line != "gup: INFO: check binary under $GOPATH/bin or $GOBIN":
-			if "Already up-to-date" not in line:
+		if "check binary under $GOPATH/bin or $GOBIN" not in line:
+			if "ERROR" in line:
+				error("Unable to get gup updates")
+				exit()
+			elif "Already up-to-date" not in line:
 				line = re.sub(r".*\[[0-9]*\/[0-9]*\] ", "", line)
 
 				packagelist = re.findall(r".+ \(", line)
