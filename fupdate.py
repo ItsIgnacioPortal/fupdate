@@ -33,6 +33,10 @@ versionNotificationSettings={
 	"Minor Versions": False,
 	"Patch Versions": False
 	}
+colorSettings = {
+	"Major Versions": "green",
+	"Minor Versions": "cyan",
+}
 generalUpgradeSettings={
 	"gup": True,
 	"pip": True,
@@ -125,12 +129,12 @@ def parseVersions(newVersion: str, oldVersion: str, package: str, manager: str) 
 
 	if(semverNewVersion > semverOldVersion):
 		if(semverNewVersion.major > semverOldVersion.major):
-			print(colored("NEW MAJOR VERSION: ", "green") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			print(colored("NEW MAJOR VERSION: ", colorSettings["Major Versions"]) + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
 			numberOfMajorUpgrades += 1
 			return [True, versionNotificationSettings["Major Versions"]]
 
 		elif(semverNewVersion.minor > semverOldVersion.minor):
-			print(colored("New minor version: ", "blue") + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
+			print(colored("New minor version: ", colorSettings["Minor Versions"]) + colored("(" + manager + ") ", "yellow") + package + " (" + oldVersion + " to " + newVersion + ")")
 			numberOfMinorUpgrades += 1
 			return [True, versionNotificationSettings["Minor Versions"]]
 
@@ -582,8 +586,8 @@ if generalUpgradeSettings["git"]:
 
 
 print("Need to upgrade " + colored(len(upgradeablePackages), "yellow") + " packages.")
-print("\t" + colored(str(numberOfMajorUpgrades) + " MAJOR upgrades", "green"))
-print("\t" + colored(str(numberOfMinorUpgrades) + " Minor upgrades", "blue"))
+print("\t" + colored(str(numberOfMajorUpgrades) + " MAJOR upgrades", colorSettings["Major Versions"]))
+print("\t" + colored(str(numberOfMinorUpgrades) + " Minor upgrades", colorSettings["Minor Versions"]))
 print("\t" + str(numberOfPatchUpgrades) + " Patch upgrades")
 userWantsToUpdate = (input("Do you want to continue? [Y/n] ")).lower()
 
