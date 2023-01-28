@@ -6,7 +6,7 @@ import json
 from termcolor import colored
 import urllib.parse
 import subprocess
-import sys
+import argparse
 
 #https://gist.github.com/sylvainpelissier/ff072a6759082590a4fe8f7e070a4952
 import pyuac
@@ -18,7 +18,13 @@ import pyuac
 4. Update everything
 """
 
-devMode = True
+parser = argparse.ArgumentParser(
+	prog = 'fupdate.py',
+	description = 'Updates packages and gets their changelogs. Supports Chocolatey, pip, python venvs, gup and git clones.'
+)
+parser.add_argument("--dev-mode", action='store_true')
+args = parser.parse_args()
+devMode = args.dev_mode
 ######################################################################################
 #								USER CUSTOMIZABLE SETTINGS
 ######################################################################################
