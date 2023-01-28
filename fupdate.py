@@ -27,9 +27,12 @@ generalUpgradeSettings={
 	"pip": False,
 	"pipVenvs": False,
 	"git": False,
-	"choco": False,
-	"npm": True
+	"choco": False
+	# "npm": True
 }
+
+# npm support is disabled until they fix `npm outdated -g`
+# https://github.com/npm/cli/issues/6098
 
 numberOfMajorUpgrades = 0
 numberOfMinorUpgrades = 0
@@ -386,37 +389,37 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 
 	return chocoUpgradeablePackages
 
-def npmIsUpdateAvailable(npmWhitelistedPackages: list[str]) -> list[str]:
-	npmOutput = npmOutput.strip()
-	npmOutputJSON = json.loads(npmOutput)
+# def npmIsUpdateAvailable(npmWhitelistedPackages: list[str]) -> list[str]:
+# 	npmOutput = npmOutput.strip()
+# 	npmOutputJSON = json.loads(npmOutput)
 
-	if len(npmOutputJSON) == 0:
-		return
+# 	if len(npmOutputJSON) == 0:
+# 		return
 
-	npmUpgradeablePackages = []
+# 	npmUpgradeablePackages = []
 
-	for key in npmOutputJSON.keys():
-		package = str(key)
-		if package in npmWhitelistedPackages:
-			oldVersion = npmOutputJSON[key]["current"]
-			newVersion = npmOutputJSON[key]["wanted"]
+# 	for key in npmOutputJSON.keys():
+# 		package = str(key)
+# 		if package in npmWhitelistedPackages:
+# 			oldVersion = npmOutputJSON[key]["current"]
+# 			newVersion = npmOutputJSON[key]["wanted"]
 
-			# Parse versions that don't comply with semantic versioning
-			semverNewVersion = forceSemver(newVersion)
-			semverOldVersion = forceSemver(oldVersion)
+# 			# Parse versions that don't comply with semantic versioning
+# 			semverNewVersion = forceSemver(newVersion)
+# 			semverOldVersion = forceSemver(oldVersion)
 
-			if semverNewVersion[1] == Exception or semverOldVersion[1] == Exception:
-				return False
+# 			if semverNewVersion[1] == Exception or semverOldVersion[1] == Exception:
+# 				return False
 			
-			semverNewVersion = semverNewVersion[0]
-			semverOldVersion = semverOldVersion[0]
+# 			semverNewVersion = semverNewVersion[0]
+# 			semverOldVersion = semverOldVersion[0]
 
-			if(semverNewVersion > semverOldVersion):
-				npmUpgradeablePackages.append(package)
+# 			if(semverNewVersion > semverOldVersion):
+# 				npmUpgradeablePackages.append(package)
 			
-			parseVersions(newVersion, oldVersion, package, "npm")
+# 			parseVersions(newVersion, oldVersion, package, "npm")
 			
-	return npmUpgradeablePackages
+# 	return npmUpgradeablePackages
 
 def upgradeGitClone(path: str):
 	if not devMode:
@@ -530,9 +533,9 @@ if generalUpgradeSettings["choco"]:
 
 	chocoUpgradeablePackages = chocoCheckForUpgrades(chocoOutput)
 
-if generalUpgradeSettings["npm"]:
-	npmWhitelistedPackages = ["calculator"]
-	npmUpgradeablePackages = npmIsUpdateAvailable(npmWhitelistedPackages)
+# if generalUpgradeSettings["npm"]:
+# 	npmWhitelistedPackages = ["calculator"]
+# 	npmUpgradeablePackages = npmIsUpdateAvailable(npmWhitelistedPackages)
 
 #TODO: add winget support when they fix `winget list`: https://github.com/microsoft/winget-cli/issues/1155
 
@@ -565,8 +568,8 @@ if generalUpgradeSettings["git"]:
 if generalUpgradeSettings["choco"]:
 	upgradeablePackages += chocoUpgradeablePackages
 
-if generalUpgradeSettings["npm"]:
-	upgradeablePackages += npmUpgradeablePackages
+# if generalUpgradeSettings["npm"]:
+# 	upgradeablePackages += npmUpgradeablePackages
 
 
 print("Need to upgrade " + colored(len(upgradeablePackages), "yellow") + " packages.")
@@ -642,14 +645,14 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 
 		runCommand(command)
 
-	# Upgrade npm packages
-	if generalUpgradeSettings["npm"]:
-		for package in npmUpgradeablePackages:
-			if not devMode:
-				command = "npm update " + package
-				print(colored("Running \"" + command + "\"...", "green"))
-			else:
-				command = "npm update --dry-run " + package
-				print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
+	# # Upgrade npm packages
+	# if generalUpgradeSettings["npm"]:
+	# 	for package in npmUpgradeablePackages:
+	# 		if not devMode:
+	# 			command = "npm update " + package
+	# 			print(colored("Running \"" + command + "\"...", "green"))
+	# 		else:
+	# 			command = "npm update --dry-run " + package
+	# 			print(colored("devMode: ", "yellow") + colored("Running \"" + command +"\"...", "green"))
 
-			runCommand(command)
+	# 		runCommand(command)
