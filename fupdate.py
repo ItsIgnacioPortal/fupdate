@@ -54,7 +54,7 @@ if not pyuac.isUserAdmin():
 try:
 	githubToken = os.environ["fupdate-github-token"]
 except KeyError:
-	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token") + " to your github personal access token. Without it, we can't fetch the changelogs.")
+	warning("No github token detected. Please set the environment variable " + colored("fupdate-github-token", "yellow") + " to your github personal access token. Without it, we can't fetch the changelogs.")
 	githubToken = ""
 
 
