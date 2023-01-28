@@ -19,6 +19,9 @@ import pyuac
 """
 
 devMode = True
+######################################################################################
+#								USER CUSTOMIZABLE SETTINGS
+######################################################################################
 versionNotificationSettings={
 	"Major Versions": True,
 	"Minor Versions": False,
@@ -32,7 +35,9 @@ generalUpgradeSettings={
 	"choco": True
 	# "npm": True
 }
-
+######################################################################################
+#				USER MODIFIYABLE FUNCTIONS ARE AT THE BOTTOM OF THE FILE
+######################################################################################
 # npm support is disabled until they fix `npm outdated -g`
 # https://github.com/npm/cli/issues/6098
 
@@ -540,7 +545,7 @@ if generalUpgradeSettings["choco"]:
 	upgradeablePackages += chocoUpgradeablePackages
 
 ############################################################################################
-#							User customizable part begins here
+#							USER MODIFIYABLE FUNCTIONS BEGIN HERE
 ############################################################################################
 
 if generalUpgradeSettings["pipVenvs"]:
