@@ -1,0 +1,2 @@
+- [ ] Add winget support when they fix `winget list`: https://github.com/microsoft/winget-cli/issues/1155
+- [ ] Enable npm support when they fix `npm outdated -g`: https://github.com/npm/cli/issues/6098

@@ -460,6 +460,8 @@ def upgradeGitClone(path: str):
 
 ############################ END OF FUNCTIONS ##########################
 
+upgradeablePackages = []
+
 # Update gup packages
 if generalUpgradeSettings["gup"]:
 	if not devMode:
@@ -475,11 +477,11 @@ if generalUpgradeSettings["gup"]:
 		"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
 
 	gupUpgradeablePackages = gupCheckForUpgrades(gupOutput)
+	upgradeablePackages += gupUpgradeablePackages
 
 if generalUpgradeSettings["pip"]:
 	# Update pip packages 
 	pipUpgradeablePackages = []
-	pipUpgradeableVenvs = []
 
 	if not devMode:
 		stream = os.popen("pip list --outdated")
@@ -501,20 +503,7 @@ if generalUpgradeSettings["pip"]:
 
 	# Check pip upgrades
 	pipUpgradeablePackages = pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages)
-
-if generalUpgradeSettings["pipVenvs"]:
-	# Check upgrades for pip virtualenvs
-	safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVenv","safety")
-	if len(safetyUpgrade) == 2:
-		pipUpgradeableVenvs.append(safetyUpgrade)
-
-if generalUpgradeSettings["git"]:
-	# Check upgrades for git repositories
-	githubSearchPath = "C:\Program Files\HackingSoftware\github-search"
-	githubSearch = checkGitRepoUpgrade(githubSearchPath)
-
-	grauditPath = "C:\Program Files\HackingSoftware\graudit"
-	graudit = checkGitRepoUpgrade(grauditPath)
+	upgradeablePackages += pipUpgradeablePackages
 
 if generalUpgradeSettings["choco"]:
 	if not devMode:
@@ -548,43 +537,36 @@ if generalUpgradeSettings["choco"]:
 		""]
 
 	chocoUpgradeablePackages = chocoCheckForUpgrades(chocoOutput)
+	upgradeablePackages += chocoUpgradeablePackages
 
-# if generalUpgradeSettings["npm"]:
-# 	npmWhitelistedPackages = ["calculator"]
-# 	npmUpgradeablePackages = npmIsUpdateAvailable(npmWhitelistedPackages)
-
-#TODO: add winget support when they fix `winget list`: https://github.com/microsoft/winget-cli/issues/1155
-
-# user@DESKTOP-25GQVRM:~$ sudo apt upgrade
-# Reading package lists... Done
-# The following packages will be upgraded:
-#   sudo
-# 1 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
-# Need to get 1,061 kB of archives.
-# After this operation, 0 B of additional disk space will be used.
-# Do you want to continue? [Y/n]
-
-upgradeablePackages = []
-
-if generalUpgradeSettings["gup"]:
-	upgradeablePackages += gupUpgradeablePackages
-
-if generalUpgradeSettings["pip"]:
-	upgradeablePackages += pipUpgradeablePackages
+############################################################################################
+#							User customizable part begins here
+############################################################################################
 
 if generalUpgradeSettings["pipVenvs"]:
+	pipUpgradeableVenvs = []
+	# Check upgrades for pip virtualenvs
+	safetyUpgrade = pipUpgradeVenvs("C:\Program Files\HackingSoftware\safetyPythonVenv","safety")
+	if len(safetyUpgrade) == 2:
+		pipUpgradeableVenvs.append(safetyUpgrade)
 	upgradeablePackages += pipUpgradeableVenvs
 
 if generalUpgradeSettings["git"]:
+	# Check upgrades for git repositories
+	githubSearchPath = "C:\Program Files\HackingSoftware\github-search"
+	githubSearch = checkGitRepoUpgrade(githubSearchPath)
+
+	grauditPath = "C:\Program Files\HackingSoftware\graudit"
+	graudit = checkGitRepoUpgrade(grauditPath)
+
 	if githubSearch:
 		upgradeablePackages.append("githubSearch")
 	if graudit:
 		upgradeablePackages.append("graudit")
 
-if generalUpgradeSettings["choco"]:
-	upgradeablePackages += chocoUpgradeablePackages
-
 # if generalUpgradeSettings["npm"]:
+# 	npmWhitelistedPackages = ["calculator"]
+# 	npmUpgradeablePackages = npmIsUpdateAvailable(npmWhitelistedPackages)
 # 	upgradeablePackages += npmUpgradeablePackages
 
 
@@ -594,14 +576,6 @@ print("\t" + colored(str(numberOfMinorUpgrades) + " Minor upgrades", "blue"))
 print("\t" + str(numberOfPatchUpgrades) + " Patch upgrades")
 userWantsToUpdate = (input("Do you want to continue? [Y/n] ")).lower()
 
-# generalUpgradeSettings={
-# 	"gup": True,
-# 	"pip": True,
-# 	"pipVenvs": True,
-# 	"git": True,
-# 	"choco": True,
-# 	"npm": True
-# }
 if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 	
 	# Upgrade go packages
