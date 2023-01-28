@@ -17,6 +17,10 @@ versionNotificationSettings={
 	- Minor upgrades
 	- Patch upgrades
 
+## Demo video
+
+[![Clickable image that goes to a demo of fupdate](https://img.youtube.com/vi/b2pJXapwRVQ/0.jpg)](https://www.youtube.com/watch?v=b2pJXapwRVQ)
+
 ## Installation
 ```
 git clone https://github.com/ItsIgnacioPortal/fupdate
