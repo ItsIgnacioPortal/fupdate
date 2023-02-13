@@ -495,13 +495,24 @@ if generalUpgradeSettings["gup"]:
 		stream = os.popen("gup check")
 		gupOutput = stream.readlines()
 	else:
-		gupOutput=["gup: INFO: check binary under $GOPATH/bin or $GOBIN",
-		"gup: INFO: [1/6] github.com/gwen001/github-subdomains (Already up-to-date: v1.2.0)",
-		"gup: INFO: [2/6] github.com/OJ/gobuster/v3 (Already up-to-date: v3.4.0)"
-		"gup: INFO: [3/6] github.com/nao1215/gup (Already up-to-date: v0.15.1)",
-		"gup: INFO: [4/6] github.com/j3ssie/metabigor (Already up-to-date: v1.12.1)",
-		"gup: INFO: [5/6] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)",
-		"gup: INFO: [6/6] github.com/itsignacioportal/hacker-scoper (v1.0.0 to v3.0.0)"]
+		gupOutput=['gup:INFO : check binary under $GOPATH/bin or $GOBIN\n',
+		'gup:INFO : [ 1/13] golang.org/x/tools/gopls (Already up-to-date: v0.11.0)\n',
+		'gup:INFO : [ 2/13] github.com/OJ/gobuster/v3 (Already up-to-date: v3.4.0)\n',
+		'gup:INFO : [ 3/13] github.com/haya14busa/goplay (Already up-to-date: v1.0.0)\n',
+		'gup:INFO : [ 4/13] golang.org/dl (Already up-to-date: v0.0.0-20230201184804-2d6232701089)\n',
+		'gup:INFO : [ 5/13] github.com/go-delve/delve (Already up-to-date: v1.20.1)\n',
+		'gup:INFO : [ 6/13] honnef.co/go/tools (current: v0.3.3, latest: v0.4.0)\n',
+		'gup:INFO : [ 7/13] golang.org/dl (Already up-to-date: v0.0.0-20230201184804-2d6232701089)\n',
+		'gup:INFO : [ 8/13] github.com/josharian/impl (current: v1.1.0, latest: v1.2.0)\n',
+		'gup:INFO : [ 9/13] github.com/gwen001/github-subdomains (current: v1.2.0, latest: v1.2.2)\n',
+		'gup:INFO : [10/13] github.com/nao1215/gup (current: v0.15.1, latest: v0.16.0)\n',
+		'gup:INFO : [11/13] github.com/j3ssie/metabigor (Already up-to-date: v1.12.1)\n',
+		'gup:INFO : [12/13] github.com/ossf/criticality_score (Already up-to-date: v1.0.7)\n',
+		'gup:INFO : [13/13] github.com/fatih/gomodifytags (Already up-to-date: v1.16.0)\n',
+		'\n',
+		'gup:INFO : If you want to update binaries, run the following command.\n',
+		'           $ gup update staticcheck.exe impl.exe github-subdomains.exe gup.exe \n']
+
 
 	gupUpgradeablePackages = gupCheckForUpgrades(gupOutput)
 	upgradeablePackages += gupUpgradeablePackages
