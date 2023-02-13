@@ -357,7 +357,7 @@ def checkGitRepoUpgrade(path: str) -> bool:
 	stream = os.popen("cd " + path + " && git describe --tags")
 	oldVersion = stream.readlines()
 	oldVersion = (oldVersion[0]).strip()
-	oldVersion = re.sub(r"-[0-9]{1,2}+-([A-z]|[0-9]){6,9}", "", oldVersion)
+	oldVersion = re.sub(r"-[0-9]+-([A-z]|[0-9])+", "", oldVersion)
 
 	stream = os.popen("cd " + path + " && git config --get remote.origin.url")
 	remote = stream.readlines()
