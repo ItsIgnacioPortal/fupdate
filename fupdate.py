@@ -61,6 +61,9 @@ def error(message):
 def warning(message):
 	print(colored("WARNING: ", "yellow") + message)
 
+def info(message):
+	print(colored("[+] ", "green") + message)
+
 if not pyuac.isUserAdmin():
 	error("Admin privileges are needed!")
 	exit()
@@ -571,16 +574,41 @@ if generalUpgradeSettings["pipVenvs"]:
 
 if generalUpgradeSettings["git"]:
 	# Check upgrades for git repositories
-	githubSearchPath = "C:\Program Files\HackingSoftware\github-search"
+	githubSearchPath = "C:\\Program Files\\HackingSoftware\\github-search"
 	githubSearch = checkGitRepoUpgrade(githubSearchPath)
 
-	grauditPath = "C:\Program Files\HackingSoftware\graudit"
+	grauditPath = "C:\\Program Files\\HackingSoftware\\graudit"
 	graudit = checkGitRepoUpgrade(grauditPath)
+
+	corscannerPath = "C:\\Program Files\\HackingSoftware\\CORScanner"
+	corscanner = checkGitRepoUpgrade(corscannerPath)
+
+	nucleiTemplatesPath = "C:\\Program Files\\HackingSoftware\\nuclei-templates"
+	nucleiTemplates = checkGitRepoUpgrade(nucleiTemplatesPath)
+
+	sstimapPath = "C:\\Program Files\\HackingSoftware\\SSTImap"
+	sstimap = checkGitRepoUpgrade(sstimapPath)
+	
+	urlessPath = "C:\\Program Files\\HackingSoftware\\urless"
+	urless = checkGitRepoUpgrade(urlessPath)
+
+	wafw00fPath = "C:\\Program Files\\HackingSoftware\\wafw00f"
+	wafw00f = checkGitRepoUpgrade(wafw00fPath)
 
 	if githubSearch:
 		upgradeablePackages.append("githubSearch")
 	if graudit:
 		upgradeablePackages.append("graudit")
+	if corscanner:
+		upgradeablePackages.append("corscanner")
+	if nucleiTemplates:
+		upgradeablePackages.append("nuclei-templates")
+	if sstimap:
+		upgradeablePackages.append("sstimap")
+	if urless:
+		upgradeablePackages.append("urless")
+	if wafw00f:
+		upgradeablePackages.append("wafw00f")
 
 # if generalUpgradeSettings["npm"]:
 # 	npmWhitelistedPackages = ["calculator"]
@@ -642,7 +670,28 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 			upgradeGitClone(githubSearchPath)
 		if graudit:
 			upgradeGitClone(grauditPath)
+		if corscanner:
+			upgradeGitClone(corscannerPath)
+
+		# This lazy mf doesn't tag versions for his project
+		upgradeGitClone("C:\\Program Files\\HackingSoftware\\lfimap")
+
+		if nucleiTemplates:
+			upgradeGitClone(nucleiTemplatesPath)
+
+		# This lazy mf doesn't tag versions for his project
+		upgradeGitClone("C:\\Program Files\\HackingSoftware\\phpunit-brute")
+
+		if sstimap:
+			upgradeGitClone(sstimapPath)
 		
+		if urless:
+			upgradeGitClone(urlessPath)
+
+		if wafw00f:
+			upgradeGitClone(wafw00fPath)
+			runCommand("python " + wafw00fPath + "\\setup.py install")
+
 	# Upgrade chocolatey packages
 	if generalUpgradeSettings["choco"]:
 		if not devMode:
