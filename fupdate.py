@@ -84,8 +84,10 @@ def stripLeadingV(version):
 	else:
 		return version
 
-def forceSemver(version):
-	"""Recieves a string that should ressemble a semver. This function would convert \"v3.5\" -> \"3.5.0\""""
+def forceSemver(version: str):
+	"""Recieves a string that should ressemble a semver. This function would convert:
+	\"v3.5\" -> \"3.5.0\"
+	\"3.0\" -> \"3.0.0\""""
 	try:
 		version = semver.VersionInfo.parse(version)
 		return [version, False]
