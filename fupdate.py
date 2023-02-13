@@ -270,7 +270,6 @@ def gupCheckForUpgrades(gupOutput):
 				error("Unable to get gup updates")
 				exit()
 			elif "Already up-to-date" not in line:
-				line = re.sub(r".*\[[0-9]*\/[0-9]*\] ", "", line)
 
 				packagelist = re.findall(r"\].+\(", line)
 				package = packagelist[0]
