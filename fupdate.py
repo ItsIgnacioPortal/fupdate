@@ -255,7 +255,12 @@ def gupCheckForUpgrades(gupOutput):
 
 	for line in gupOutput:
 		line = line.strip()
-		if "check binary under $GOPATH/bin or $GOBIN" not in line:
+		if ("check binary under $GOPATH/bin or $GOBIN" not in line 
+			and line != "\n" 
+			and "$ gup update" not in line 
+			and "If you want to update binaries, run the following command." not in line
+			and len(line) != 0):
+
 			if "ERROR" in line:
 				error("Unable to get gup updates")
 				exit()
@@ -267,8 +272,8 @@ def gupCheckForUpgrades(gupOutput):
 				package = package[:-2]
 
 				versionList = re.findall(r"\(.*\)", line)
-				newVersion = ((re.findall(r"to .*", versionList[0]))[0])[3:-1]
-				oldVersion = ((re.findall(r".* to", versionList[0]))[0])[1:-3]
+				newVersion = ((re.findall(r"latest: .*\)", versionList[0]))[0])[8:-1]
+				oldVersion = ((re.findall(r"current: .*,", versionList[0]))[0])[9:-1]
 				
 				# If a new version is available...
 				result = parseVersions(newVersion, oldVersion, package, "gup")
