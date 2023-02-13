@@ -485,6 +485,7 @@ upgradeablePackages = []
 
 # Update gup packages
 if generalUpgradeSettings["gup"]:
+	info("Getting " + colored("gup", "yellow") + " packages...")
 	if not devMode:
 		stream = os.popen("gup check")
 		gupOutput = stream.readlines()
@@ -503,6 +504,8 @@ if generalUpgradeSettings["gup"]:
 if generalUpgradeSettings["pip"]:
 	# Update pip packages 
 	pipUpgradeablePackages = []
+
+	info("Getting " + colored("pip", "yellow") + " packages...")
 
 	if not devMode:
 		stream = os.popen("pip list --outdated")
@@ -527,6 +530,7 @@ if generalUpgradeSettings["pip"]:
 	upgradeablePackages += pipUpgradeablePackages
 
 if generalUpgradeSettings["choco"]:
+	info("Getting " + colored("choco", "yellow") + " packages...")
 	if not devMode:
 		stream = os.popen("choco outdated")
 		chocoOutput = stream.readlines()
