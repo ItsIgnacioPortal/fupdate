@@ -166,6 +166,9 @@ def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 		pathList = (repoURL.path[1:]).split("/") 
 		pathListLen = len(pathList)
 
+		if pathList[1].endswith(".git"):
+			pathList[1] = (pathList[1])[:-4]
+
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
 		if pathListLen == 2 or (pathListLen == 3 and pathList[2] == "json") or (pathListLen == 4 and pathList[3] == "latest"):
 			#/repos/{owner}/{repo}/releases/latest
