@@ -62,7 +62,7 @@ def warning(message):
 	print(colored("WARNING: ", "yellow") + message)
 
 def info(message):
-	print(colored("[+] ", "green") + message)
+	print("[+] " + message)
 
 if not pyuac.isUserAdmin():
 	error("Admin privileges are needed!")
