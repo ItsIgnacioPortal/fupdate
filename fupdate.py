@@ -267,9 +267,9 @@ def gupCheckForUpgrades(gupOutput):
 			elif "Already up-to-date" not in line:
 				line = re.sub(r".*\[[0-9]*\/[0-9]*\] ", "", line)
 
-				packagelist = re.findall(r".+ \(", line)
+				packagelist = re.findall(r"\].+\(", line)
 				package = packagelist[0]
-				package = package[:-2]
+				package = package[2:-2]
 
 				versionList = re.findall(r"\(.*\)", line)
 				newVersion = ((re.findall(r"latest: .*\)", versionList[0]))[0])[8:-1]
