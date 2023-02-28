@@ -170,7 +170,10 @@ def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 			pathList[1] = (pathList[1])[:-4]
 
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-		if pathListLen == 2 or (pathListLen == 3 and pathList[2] == "json") or (pathListLen == 4 and pathList[3] == "latest"):
+		if (pathListLen == 2 or 
+			(pathListLen == 3 and (pathList[2] == "json" or (pathList[2]).startswith("v"))) or  #Idk what this is for
+			(pathListLen == 4 and pathList[3] == "latest")  #Some go packages end with v2, v3, etc. 
+			):
 			#/repos/{owner}/{repo}/releases/latest
 			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/latest"
 
@@ -208,8 +211,11 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 		pathListLen = len(pathList)
 
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
-		if pathListLen == 2 or (pathListLen == 3 and pathList[2] == "json") or (pathListLen == 4 and pathList[3] == "latest"):
-			
+		if (pathListLen == 2 or 
+			(pathListLen == 3 and (pathList[2] == "json" or (pathList[2]).startswith("v"))) or  #Idk what this is for
+			(pathListLen == 4 and pathList[3] == "latest")  #Some go packages end with v2, v3, etc. 
+			):
+
 			latestVersion = getLatestGithubRelease(repoURL)
 			if latestVersion.startswith("v"):
 				version = "v" + version
@@ -287,9 +293,7 @@ def gupCheckForUpgrades(gupOutput):
 				if result[1]:
 					if package.startswith("github.com"):
 						
-						if not devMode:
-
-							print(getGithubChangelog("https://" + package, newVersion) + "\n")
+						print(getGithubChangelog("https://" + package, newVersion) + "\n")
 
 					else:
 						print("You must manually check the release notes for: " + package)
@@ -499,7 +503,7 @@ if generalUpgradeSettings["gup"]:
 	else:
 		gupOutput=['gup:INFO : check binary under $GOPATH/bin or $GOBIN\n',
 		'gup:INFO : [ 1/13] golang.org/x/tools/gopls (Already up-to-date: v0.11.0)\n',
-		'gup:INFO : [ 2/13] github.com/OJ/gobuster/v3 (Already up-to-date: v3.4.0)\n',
+		'gup:INFO : [ 2/13] github.com/OJ/gobuster/v3 (current: v3.4.0, latest: v3.5.0)\n',
 		'gup:INFO : [ 3/13] github.com/haya14busa/goplay (Already up-to-date: v1.0.0)\n',
 		'gup:INFO : [ 4/13] golang.org/dl (Already up-to-date: v0.0.0-20230201184804-2d6232701089)\n',
 		'gup:INFO : [ 5/13] github.com/go-delve/delve (Already up-to-date: v1.20.1)\n',
