@@ -30,7 +30,7 @@ devMode = args.dev_mode
 ######################################################################################
 versionNotificationSettings={
 	"Major Versions": True,
-	"Minor Versions": False,
+	"Minor Versions": True,
 	"Patch Versions": False
 	}
 colorSettings = {
@@ -286,12 +286,10 @@ def gupCheckForUpgrades(gupOutput):
 				
 				if result[1]:
 					if package.startswith("github.com"):
-						packageList = package.split("/")
 						
 						if not devMode:
-							url = "https://api." + packageList[0] + "/repos/" + packageList[1] + "/" + packageList[2] + "/releases/tags/v" + newVersion
 
-							print(getGithubChangelog(url) + "\n")
+							print(getGithubChangelog("https://" + package, newVersion) + "\n")
 
 					else:
 						print("You must manually check the release notes for: " + package)
