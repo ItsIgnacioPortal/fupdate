@@ -93,12 +93,17 @@ def forceSemver(version: str):
 		return [version, False]
 	except ValueError:
 		versionSplit = version.split(".")
-		for number in versionSplit:
+		for index, versionSegment in enumerate(versionSplit):
 			try:
-				int(number)
+				number = int(versionSegment)
+				#This is done to deal with the edge case of individual versions having leading ceros and other non-int shenanigans
+				versionSplit[index] = str(number)
 			except ValueError:
 				error("Unable to parse " + colored(version, "yellow") + " as a Semantic Version (See: https://semver.org)")
 				return [None, Exception]
+
+			#Join the version fragments putting a dot between each item
+			version = ".".join(versionSplit)
 		
 		if len(versionSplit) == 2:
 			version = version + ".0"
@@ -254,11 +259,11 @@ def getPypiChangelog(package, newVersion):
 			if sourceCodeURL.hostname == "github.com":				
 				return getGithubChangelog(sourceCodeURL, newVersion)
 			else:
-				return warning("\tUnable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
+				return warning("Unable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
 
 		except KeyError:
 			#TODO: Add an option to allow the user to fill in the source code site
-			return warning("\tUnable to get source code site for the " + colored(package, "yellow") + " pypi package.")
+			return warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
 
 def gupCheckForUpgrades(gupOutput):
 	"""gupOutput = The output of \"gup check\""""
