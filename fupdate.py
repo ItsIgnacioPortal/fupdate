@@ -225,6 +225,10 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 			if latestVersion.startswith("v"):
 				version = "v" + version
 
+			#Strip the ".git" from the end of the url
+			if pathList[1].endswith(".git"):
+				pathList[1] = (pathList[1])[:-4]
+
 			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/" + version
 
 		else:
