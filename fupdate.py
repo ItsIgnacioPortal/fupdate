@@ -92,6 +92,10 @@ def forceSemver(version: str):
 		version = semver.VersionInfo.parse(version)
 		return [version, False]
 	except ValueError:
+		#Strip leading v
+		if version.startswith("v"):
+			version = version[1:]
+
 		versionSplit = version.split(".")
 		for index, versionSegment in enumerate(versionSplit):
 			try:
@@ -108,7 +112,7 @@ def forceSemver(version: str):
 		if len(versionSplit) == 2:
 			version = version + ".0"
 			version = semver.VersionInfo.parse(version)
-		else:
+		elif len(versionSplit) != 3:
 			return [None, Exception]
 	
 	return [version, True]
@@ -207,6 +211,7 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 
 		if not isinstance(repoURL, urllib.parse.ParseResult):
 			try:
+				originalRepoURL = repoURL
 				repoURL = urllib.parse.urlparse(repoURL)
 			except:
 				return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
@@ -244,8 +249,17 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 
 		try:
 			return responseJSON["body"]
-		except:
-			return colored("\tERROR: ", "red") + "This version does not exist: " + colored(url,"yellow")
+		except KeyError:
+			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/tags"
+			response = requests.get(url, headers=headers)
+			responseJSON = json.loads(response.text)
+			try:
+				if responseJSON[0]["name"] == version or (forceSemver(responseJSON[0]["name"]))[0] == version:
+					return colored("\tWARNING: ", "yellow") + "The repository " + colored(originalRepoURL, "yellow") + " has tags with no releases notes associated to them"
+				else:
+					return colored("\tERROR: ", "red") + colored(originalRepoURL, "yellow") + " has no associated tag/release " + colored(version, "yellow")
+			except KeyError:
+				return colored("\tERROR: ", "red") + "Unable to get changelog API URL: " + colored(url,"yellow")
 
 def getPypiChangelog(package, newVersion):
 	url = "https://pypi.org/pypi/" + package + "/json"
