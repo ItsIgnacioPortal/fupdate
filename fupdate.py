@@ -383,8 +383,8 @@ def checkGitRepoUpgrade(path: str) -> bool:
 			result = parseVersions(newVersion, oldVersion, package, "git")
 			if result[1]:
 				package = pathList[0] + "/" + pathList[1]
-				url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/v" + newVersion
-				changelog = getGithubChangelog(url)
+				url = "https://github.com/" + pathList[0] + "/" + pathList[1]
+				changelog = getGithubChangelog(url, newVersion)
 				print(changelog + "\n")
 				
 			return result[0]
@@ -401,7 +401,12 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 	for line in chocoOutput:
 		line = line.split("|")
 		if not line[0].endswith(".install"):
-			result = parseVersions(line[2], line[1], line[0], "choco")
+			try:
+				result = parseVersions(line[2], line[1], line[0], "choco")
+			except IndexError:
+				error("Unable to parse chocolatey output")
+				error(line)
+				exit()
 
 			if result[0]:
 				chocoUpgradeablePackages.append(line[0])
