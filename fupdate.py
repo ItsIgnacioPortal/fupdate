@@ -428,6 +428,41 @@ def checkGitRepoUpgrade(path: str) -> bool:
 	else:
 		warning("The github remote URL for " + colored(package, "yellow") + " is in an unsupported format: " + colored(remote, "yellow"))
 
+# Given `choco info package-name-here` output like:
+""" 	Chocolatey v1.3.1
+	dotnet-desktopruntime 8.0.0 [Approved]
+	Title: Microsoft .NET Desktop Runtime | Published: 2023-11-14
+	Package approved as a trusted package on Nov 15 2023 12:48:59.
+	Package testing status: Passing on Nov 14 2023 19:24:22.
+	Number of Downloads: 566052 | Downloads for this version: 43176
+	Package url
+	Chocolatey Package Source: https://github.com/dotnetcore-chocolatey/dotnetcore-chocolateypackages/tree/master/dotnet-desktopruntime
+	Package Checksum: 'nP759FPhd4FKlu1S0fDOoopSPK62qbi4LB23FQA+P2IBuaqVSc1okMThVKLFz/RbzpNo5bQsISbzXEGFhY6gUw==' (SHA512)
+	Tags: microsoft .net core runtime redistributable
+	Software Site: https://dot.net/core
+	Software License: https://rawcdn.githack.com/dotnet/core/290743955c7dec3315e72da5dcd589b2bd177e71/LICENSE
+	Documentation: https://docs.microsoft.com/dotnet
+	Issues: https://www.microsoft.com/net/support
+	Summary: This package is required to run Windows Desktop applications with the .NET Runtime.
+	Description: .NET Core is a general purpose development platform maintained by Microsoft and the .NET community on GitHub. It is cross-platform, supporting Windows, macOS and Linux, and can be used in device, cloud, and embedded/IoT scenarios.
+
+	This package is required to run Windows Desktop applications with the .NET Runtime.
+
+	This is a *metapackage*, which installs the latest release of .NET Desktop Runtime across all versions.
+	Release Notes: ##### Software
+	[.NET 8.0.0 Release Notes](https://github.com/dotnet/core/blob/main/release-notes/8.0/8.0.0/8.0.0.md)
+
+	1 packages found. """
+# This function would return only the text:
+""" 	Release Notes: ##### Software
+	[.NET 8.0.0 Release Notes](https://github.com/dotnet/core/blob/main/release-notes/8.0/8.0.0/8.0.0.md)
+
+	1 packages found. """
+def extractReleaseNotesFromChocoInfo(packageInfo: list[str], titleLineIndex: int) -> str:
+	changelog = "\n".join(packageInfo[titleLineIndex:-1])
+	return changelog
+
+
 def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 	"""Receives the raw output of \"choco outdated\""""
 
@@ -461,7 +496,7 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 					# If we haven't found the release notes yet...
 					if not releaseNotes[0]:
 						title = " " + title +": "
-						for packageInfoLine in packageInfo:
+						for index, packageInfoLine in enumerate(packageInfo):
 							if packageInfoLine.startswith(title):
 								releaseNotesURL = (packageInfoLine[len(title):]).strip()
 								try:
@@ -471,10 +506,11 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 										releaseNotes[1] = getGithubChangelog(releaseNotesURLParsed, line[2])
 									else:
 										releaseNotes[0] = True
-										releaseNotes[1] = "\t" + packageInfoLine.strip()
+										releaseNotes[1] = extractReleaseNotesFromChocoInfo(packageInfo, index)
+										break
 								except:
 									releaseNotes[0] = True
-									releaseNotes[1] = "\t" + packageInfoLine.strip()
+									releaseNotes[1] = extractReleaseNotesFromChocoInfo(packageInfo, index)
 								break
 
 				if not releaseNotes[0]:
