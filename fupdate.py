@@ -773,6 +773,11 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 
 	# 		runCommand(command)
 
-print(colored("==================================================", "green"))
-print(colored("                      ALL DONE!                   ", "green"))
-print(colored("==================================================", "green"))	print(colored("==================================================", "green"))
+	print(colored("==================================================", "green"))
+	print(colored("                      ALL DONE!                   ", "green"))
+	print(colored("==================================================", "green"))
+
+else:
+	print(colored("==================================================", "yellow"))
+	print(colored("                 UPGRADE CANCELED                 ", "yellow"))
+	print(colored("==================================================", "yellow"))
