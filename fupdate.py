@@ -264,6 +264,14 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 			except KeyError:
 				return colored("\tERROR: ", "red") + "Unable to get changelog API URL: " + colored(url,"yellow")
 
+
+def fancyChangelogPrint(changelog: str):
+	changelog = changelog.strip()
+	for line in changelog.splitlines():
+		print("\t| " + line)
+	print("")
+
+
 def getPypiChangelog(package, newVersion):
 	url = "https://pypi.org/pypi/" + package + "/json"
 
@@ -319,7 +327,11 @@ def gupCheckForUpgrades(gupOutput):
 				if result[1]:
 					if package.startswith("github.com"):
 						
-						print(getGithubChangelog("https://" + package, newVersion) + "\n")
+						changelog = getGithubChangelog("https://" + package, newVersion)
+						if changelog.startswith("\tERROR"):
+							print(changelog)
+						else:
+							fancyChangelogPrint(changelog)
 
 					else:
 						print("You must manually check the release notes for: " + package)
@@ -361,7 +373,10 @@ def pipIsUpdateAvailable(pipOutput, pipWhitelistedPackages):
 			if result[1]:
 				try:
 					changelog = getPypiChangelog(package, newVersion)
-					print(changelog + "\n")
+					if changelog.startswith("\tWARNING"):
+						print(changelog)
+					else:
+						fancyChangelogPrint(changelog)
 				except:
 					# If getPypiChangelog returned an error...
 					continue
@@ -465,7 +480,7 @@ def chocoCheckForUpgrades(chocoOutput: str) -> list[str]:
 				if not releaseNotes[0]:
 					print("\tRelease notes were not included in the nuspec.")
 				else:
-					print(releaseNotes[1])
+					fancyChangelogPrint(releaseNotes[1])
 
 	return chocoUpgradeablePackages
 
