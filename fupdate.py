@@ -224,11 +224,12 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 
 		#Normally pathListLen would always be equal to 2, but in the rare case where someone put the URL as (for example) "https://github.com/username/repo/", the len will be three, because of that extra slash at the end. This is also done to prevent potential CSRF or token leaks
 		if (pathListLen == 2 or 
-			(pathListLen == 3 and (pathList[2] == "json" or (pathList[2]).startswith("v"))) or  #Idk what this is for
-			(pathListLen == 4 and pathList[3] == "latest")  #Some go packages end with v2, v3, etc. 
+			(pathListLen == 3 and (pathList[2] == "json" or (pathList[2]).startswith("v")) or  #Idk what this is for
+			(pathListLen == 4 and pathList[3] == "latest") or #Some go packages end with v2, v3, etc. 
+			(pathListLen >= 3 and pathList[2] == "releases")) # Deal with "https://github.com/Ryochan7/DS4Windows/releases/tag/3.3.3"
 			):
 
-			latestVersion = getLatestGithubRelease(repoURL)
+			latestVersion = getLatestGithubRelease("https://github.com/" + pathList[0] + "/" + pathList[1])
 			if latestVersion.startswith("v"):
 				version = "v" + version
 
@@ -591,6 +592,7 @@ if generalUpgradeSettings["choco"]:
 		"Outdated Packages",
 		" Output is package name | current version | available version | pinned?",
 		"",
+		"betterdiscord|1.2.1|1.3.0|false",
 		"dotnet-7.0-desktopruntime|7.0.1|7.0.2|false",
 		"dotnet-desktopruntime|7.0.1|7.0.2|false",
 		"ds4windows|3.2.6|3.2.7|false",
