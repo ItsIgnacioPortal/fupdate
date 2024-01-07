@@ -56,10 +56,10 @@ numberOfMinorUpgrades = 0
 numberOfPatchUpgrades = 0
 
 def error(message):
-	print(colored("ERROR: ", "red") + message)
+	print(colored("\tERROR: ", "red") + message + "\n")
 
 def warning(message):
-	print(colored("WARNING: ", "yellow") + message)
+	print(colored("\tWARNING: ", "yellow") + message +"\n")
 
 def info(message):
 	print("[+] " + message)
@@ -168,7 +168,7 @@ def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 		try:
 			repoURL = urllib.parse.urlparse(repoURL)
 		except:
-			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+			return colored("\tFATAL ERROR [001]: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed.\n"
 
 
 	if githubToken != "":
@@ -188,7 +188,9 @@ def getLatestGithubRelease(repoURL: urllib.parse.ParseResult | str) -> str:
 
 
 		else:
-			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+			error = colored("\tFATAL ERROR [002]: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed.\n"
+			print(error)
+			return error
 
 
 	headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
@@ -214,7 +216,7 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 				originalRepoURL = repoURL
 				repoURL = urllib.parse.urlparse(repoURL)
 			except:
-				return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+				return colored("\tFATAL ERROR [003]: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed.\n"
 
 
 		pathList = (repoURL.path[1:]).split("/") 
@@ -237,7 +239,7 @@ def getGithubChangelog(repoURL: urllib.parse.ParseResult | str, version):
 			url = "https://api.github.com/repos/" + pathList[0] + "/" + pathList[1] + "/releases/tags/" + version
 
 		else:
-			return colored("\tFATAL ERROR: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed."
+			return colored("\tFATAL ERROR [004]: ", "red") + "The github source code URL " + colored(repoURL, "yellow") + " was malformed.\n"
 
 
 		headers = {"Accept": "application/vnd.github+json", "Authorization": "Bearer " + githubToken, "X-GitHub-Api-Version": "2022-11-28"}
@@ -277,11 +279,11 @@ def getPypiChangelog(package, newVersion):
 			if sourceCodeURL.hostname == "github.com":				
 				return getGithubChangelog(sourceCodeURL, newVersion)
 			else:
-				return warning("Unable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
+				return "\t" + warning("Unable to fetch changelog for " + colored(package, "yellow") + ". The source code was not hosted on github.")
 
 		except KeyError:
 			#TODO: Add an option to allow the user to fill in the source code site
-			return warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
+			return "\t" + warning("Unable to get source code site for the " + colored(package, "yellow") + " pypi package.")
 
 def gupCheckForUpgrades(gupOutput):
 	"""gupOutput = The output of \"gup check\""""
@@ -771,4 +773,4 @@ if userWantsToUpdate == "" or userWantsToUpdate.startswith("y"):
 
 print(colored("==================================================", "green"))
 print(colored("                      ALL DONE!                   ", "green"))
-print(colored("==================================================", "green"))
+print(colored("==================================================", "green"))	print(colored("==================================================", "green"))
