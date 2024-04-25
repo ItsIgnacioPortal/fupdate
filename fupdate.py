@@ -115,6 +115,7 @@ def forceSemver(version: str):
 		elif len(versionSplit) != 3:
 			return [None, Exception]
 	
+	version = semver.VersionInfo.parse(version)
 	return [version, True]
 
 			
@@ -644,6 +645,9 @@ if generalUpgradeSettings["choco"]:
 		" Output is package name | current version | available version | pinned?",
 		"",
 		"betterdiscord|1.2.1|1.3.0|false",
+		"scrcpy|2.3.0|2.4.0|false",
+		"Shotcut|23.12.15|24.02.29|false",
+		"shotcut.install|23.12.15|24.02.29|false",
 		"dotnet-7.0-desktopruntime|7.0.1|7.0.2|false",
 		"dotnet-desktopruntime|7.0.1|7.0.2|false",
 		"ds4windows|3.2.6|3.2.7|false",
